@@ -138,13 +138,21 @@ export const useMarketplaceStore = defineStore('marketplace', {
           this.fetchProgress.currentSource = source.name
 
           try {
-            const newSkills = await invoke<MarketplaceSkill[]>(
-              'fetch_marketplace_skills',
-              {
-                sourceId: source.id,
-                forceRefresh,
-              },
-            )
+            let newSkills: MarketplaceSkill[] = []
+
+            if (source.id === 'skillsmp') {
+              // Use Proxy for SkillsMP to bypass Cloudflare
+              newSkills = await this.fetchSkillsmpDirect('*')
+            } else {
+              // Use standard backend fetch for others
+              newSkills = await invoke<MarketplaceSkill[]>(
+                'fetch_marketplace_skills',
+                {
+                  sourceId: source.id,
+                  forceRefresh,
+                },
+              )
+            }
 
             // Merge results, avoiding duplicates
             const existingIds = new Set(
@@ -193,7 +201,7 @@ export const useMarketplaceStore = defineStore('marketplace', {
           this.skills.push(...results)
         } else {
           // Keyword search using WebView Proxy to bypass Cloudflare
-          const results = await this.fetchSkillsmpViaProxy(query)
+          const results = await this.fetchSkillsmpDirect(query)
 
           // Replace skills with search results
           this.skills = this.skills.filter((s) => s.source_id !== 'skillsmp')
@@ -207,86 +215,93 @@ export const useMarketplaceStore = defineStore('marketplace', {
     },
 
     /**
-     * Fetch SkillsMP via a separate WebView to bypass Cloudflare JA3/Challenge
+     * Fetch SkillsMP using Tauri HTTP plugin (bypasses CORS and uses native HTTP client)
+     *
+     * Architecture Note:
+     * - Browser fetch() is blocked by CORS in dev mode (localhost origin)
+     * - Tauri HTTP plugin makes native requests, bypassing CORS entirely
+     * - This also works around Cloudflare's browser detection
      */
-    async fetchSkillsmpViaProxy(query: string): Promise<MarketplaceSkill[]> {
-      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
-      const { emit, listen } = await import('@tauri-apps/api/event')
+    async fetchSkillsmpDirect(
+      query: string,
+      page = 1,
+      limit = 50,
+    ): Promise<MarketplaceSkill[]> {
+      const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
 
       // Get API Key from Rust store
       const apiKey = await invoke<string | null>('get_skillsmp_api_key')
       if (!apiKey) {
-        throw new Error('SkillsMP API key not configured.')
+        throw new Error(
+          'SkillsMP API key not configured. Add SKILLSMP_API_KEY to .env or configure in Settings.',
+        )
       }
 
-      const label = 'skillsmp-proxy'
-      let webview = await WebviewWindow.getByLabel(label)
+      const url = `https://skillsmp.com/api/v1/skills/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}&sortBy=stars`
 
-      if (!webview) {
-        // Create the proxy window if it doesn't exist
-        webview = new WebviewWindow(label, {
-          url: '/proxy.html', // Local asset
-          visible: false,
-          title: 'SkillsMP Cloudflare Proxy',
-          width: 500,
-          height: 600,
-        })
-      }
+      console.log('[SkillsMP] Fetching via Tauri HTTP:', url)
 
-      const reqId = Math.random().toString(36).substring(7)
-      const url = `https://skillsmp.com/api/v1/skills/search?q=${encodeURIComponent(query)}&page=1&limit=50&sortBy=stars`
-
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Proxy fetch timed out'))
-        }, 45000)
-
-        const unlistens: any[] = []
-
-        // Listen for response from proxy
-        listen('proxy-response', (event: any) => {
-          const payload = event.payload
-          if (payload.reqId !== reqId) return
-
-          clearTimeout(timeout)
-          unlistens.forEach((f) => f())
-
-          if (payload.success) {
-            const skillsmpResults = payload.data.data || []
-            const formatted = skillsmpResults.map((s: any) => ({
-              name: s.name,
-              description: s.description || '',
-              path: s.url || '',
-              source_id: 'skillsmp',
-              source_name: 'SkillsMP',
-              stars: s.stars || 0,
-              repo: s.repo,
-              repo_url: s.repo ? `https://github.com/${s.repo}` : undefined,
-              tags: [],
-            }))
-            resolve(formatted)
-          } else {
-            reject(new Error(payload.error))
-          }
-        }).then((u) => unlistens.push(u))
-
-        listen('proxy-challenge', (event: any) => {
-          if (event.payload.reqId !== reqId) return
-
-          // Window is already shown by proxy.html logica
-          alert(
-            'Cloudflare challenge detected. Please solve it in the popup and click Search again.',
-          )
-          clearTimeout(timeout)
-          unlistens.forEach((f) => f())
-          reject(new Error('CHALLENGE_REQUIRED'))
-        }).then((u) => unlistens.push(u))
-
-        // Give the proxy a moment to load
-        setTimeout(() => {
-          emit('proxy-request', { url, apiKey, reqId })
-        }, 1000)
+      const response = await tauriFetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
       })
+
+      console.log('[SkillsMP] Response status:', response.status)
+
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`SkillsMP API error (${response.status}): ${text}`)
+      }
+
+      const data = await response.json()
+      console.log('[SkillsMP] Raw response:', data)
+
+      if (!data.success) {
+        throw new Error(data.error?.message || 'SkillsMP request failed')
+      }
+
+      // Handle different response structures
+      let skills = data.data
+      if (!Array.isArray(skills)) {
+        console.warn(
+          '[SkillsMP] data.data is not an array:',
+          typeof skills,
+          skills,
+        )
+        // Try to extract from nested structure
+        if (skills && Array.isArray(skills.skills)) {
+          skills = skills.skills
+        } else if (skills && Array.isArray(skills.results)) {
+          skills = skills.results
+        } else {
+          skills = []
+        }
+      }
+      console.log('[SkillsMP] Got', skills.length, 'skills')
+
+      return skills.map((s: any) => ({
+        name: s.name,
+        description: s.description || '',
+        path: s.skillUrl || s.githubUrl || '', // Use skillUrl or githubUrl as path
+        version: undefined,
+        metadata: {
+          // Use githubUrl directly - it's already a full URL
+          repo: s.githubUrl || '',
+          repo_url: s.githubUrl || '',
+          author: s.author || '',
+          skillUrl: s.skillUrl || '',
+        },
+        source_id: 'skillsmp',
+        source_name: 'SkillsMP',
+        stars: s.stars || 0,
+        repo: s.githubUrl, // For display purposes
+        repo_url: s.githubUrl,
+        tags: [],
+      }))
     },
 
     async refreshAll() {

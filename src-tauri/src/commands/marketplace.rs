@@ -251,8 +251,34 @@ async fn fetch_git_source(
     };
 
     let mut source_skills = Vec::new();
-    if let Ok(skills) = discover_skills(search_path, subpath).await {
+    if let Ok(skills) = discover_skills(search_path.clone(), subpath.clone()).await {
         for skill in skills {
+            // Build repo_url from the source URL and skill path
+            let skill_repo_url = if source.url.contains("github.com") {
+                // For GitHub sources, construct the full URL to the skill directory
+                // Convert clone URL back to browsable URL
+                let base_url = clone_url
+                    .trim_end_matches(".git")
+                    .replace("git@github.com:", "https://github.com/");
+
+                // Get relative path from search_path to skill.path
+                let skill_path = std::path::Path::new(&skill.path);
+                let search_base = std::path::Path::new(&search_path);
+
+                if let Ok(rel_path) = skill_path.strip_prefix(search_base) {
+                    let rel_str = rel_path.to_str().unwrap_or("");
+                    if let Some(sp) = &subpath {
+                        Some(format!("{}/tree/main/{}/{}", base_url, sp, rel_str))
+                    } else {
+                        Some(format!("{}/tree/main/{}", base_url, rel_str))
+                    }
+                } else {
+                    Some(base_url)
+                }
+            } else {
+                None
+            };
+
             source_skills.push(MarketplaceSkill {
                 skill,
                 source_id: source.id.clone(),
@@ -260,8 +286,8 @@ async fn fetch_git_source(
                 category: None,
                 tags: Vec::new(),
                 stars: 0,
-                repo: None,
-                repo_url: None,
+                repo: skill_repo_url.clone(),
+                repo_url: skill_repo_url,
             });
         }
     }

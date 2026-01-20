@@ -4,6 +4,7 @@ import { X } from 'lucide-vue-next'
 defineProps<{
   show: boolean
   title: string
+  maxWidth?: string
 }>()
 
 const emit = defineEmits<{
@@ -15,7 +16,7 @@ const emit = defineEmits<{
   <Teleport to="body">
     <Transition name="fade">
       <div v-if="show" class="modal-overlay" @click.self="emit('close')">
-        <div class="modal-container">
+        <div class="modal-container" :style="{ maxWidth: maxWidth || '500px' }">
           <div class="modal-header">
             <h3>{{ title }}</h3>
             <button class="close-btn" @click="emit('close')">

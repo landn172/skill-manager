@@ -8,6 +8,14 @@
     "core:event:default",
     "core:webview:default",
     "core:window:default",
-    "opener:default"
+    "opener:default",
+    "dialog:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://skillsmp.com/*" },
+        { "url": "https://*.skillsmp.com/*" }
+      ]
+    }
   ]
 }

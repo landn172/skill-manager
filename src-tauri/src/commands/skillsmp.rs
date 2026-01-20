@@ -106,11 +106,13 @@ pub async fn fetch_skillsmp_skills(
     let mut url = format!("{}/skills/search", SKILLSMP_API_BASE);
     let mut params = Vec::new();
 
-    if let Some(q) = &query {
-        if !q.is_empty() {
-            params.push(format!("q={}", urlencoding::encode(q)));
-        }
-    }
+    let search_query = query.as_deref().unwrap_or("*");
+    let effective_query = if search_query.is_empty() {
+        "*"
+    } else {
+        search_query
+    };
+    params.push(format!("q={}", urlencoding::encode(effective_query)));
     if let Some(p) = page {
         params.push(format!("page={}", p));
     }

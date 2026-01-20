@@ -13,6 +13,7 @@ import {
   Key,
   ExternalLink,
 } from 'lucide-vue-next'
+import AgentIcon from '@/components/icons/AgentIcon.vue'
 import { useProjectStore } from '@/stores/project'
 import { open } from '@tauri-apps/plugin-dialog'
 import { homeDir } from '@tauri-apps/api/path'
@@ -131,6 +132,29 @@ onMounted(() => {
   loadApiKey()
 })
 
+const clearingCache = ref(false)
+
+async function handleClearCache() {
+  if (
+    !confirm(
+      'Are you sure you want to clear the skills cache? This will force a fresh fetch from all sources.',
+    )
+  )
+    return
+
+  clearingCache.value = true
+  try {
+    const message = await invoke<string>('clear_cache')
+    alert(message)
+    // Optionally refresh marketplace store if needed
+    await marketplaceStore.fetchSources()
+  } catch (e) {
+    alert(`Failed to clear cache: ${e}`)
+  } finally {
+    clearingCache.value = false
+  }
+}
+
 const handleAddProject = async () => {
   try {
     const selected = await open({
@@ -220,17 +244,9 @@ const handleAddProject = async () => {
             class="agent-card"
           >
             <div class="agent-info">
-              <span class="agent-icon-wrap">{{
-                agent.icon === 'Sparkles'
-                  ? '✨'
-                  : agent.icon === 'Terminal'
-                    ? '💻'
-                    : agent.icon === 'Bot'
-                      ? '🤖'
-                      : agent.icon === 'Code'
-                        ? '📄'
-                        : '🖱️'
-              }}</span>
+              <div class="agent-icon-wrap">
+                <AgentIcon :type="agent.agent_type" :size="24" />
+              </div>
               <div class="agent-details">
                 <span class="agent-name">{{ agent.display_name }}</span>
                 <span class="agent-path">{{ agent.global_skills_dir }}</span>
@@ -388,6 +404,32 @@ const handleAddProject = async () => {
             <Plus :size="18" />
             <span>Add Project Directory</span>
           </button>
+        </div>
+      </section>
+
+      <!-- Cache Management Section -->
+      <section class="settings-section">
+        <div class="section-header">
+          <Trash2 :size="20" class="section-icon" />
+          <h2>Cache Management</h2>
+        </div>
+        <p class="section-desc">
+          Clear cached marketplace data to force a fresh fetch of all skills.
+        </p>
+
+        <div class="cache-actions">
+          <button
+            class="btn-warning"
+            @click="handleClearCache"
+            :disabled="clearingCache"
+          >
+            <Trash2 :size="16" />
+            {{ clearingCache ? 'Clearing...' : 'Clear Skills Cache' }}
+          </button>
+          <span class="cache-hint"
+            >This will clear all cached skill data from marketplace
+            sources.</span
+          >
         </div>
       </section>
     </div>
@@ -812,5 +854,40 @@ input:checked + .slider:before {
 .icon-btn.delete:hover {
   color: var(--accent-error);
   background-color: rgba(239, 68, 68, 0.1);
+}
+
+.cache-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-warning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background-color: transparent;
+  color: #f59e0b;
+  border: 1px solid #f59e0b;
+  border-radius: var(--border-radius);
+  font-weight: 500;
+  width: fit-content;
+  transition: all 0.2s;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background-color: rgba(245, 158, 11, 0.1);
+}
+
+.btn-warning:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cache-hint {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>

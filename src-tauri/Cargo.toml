@@ -39,5 +39,6 @@ urlencoding = "2.1"
 dotenvy = "0.15"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 futures-util = "0.3"
+tauri-plugin-http = "2.5.6"
 
 

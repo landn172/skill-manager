@@ -4,6 +4,7 @@ import { useMarketplaceStore } from '@/stores/marketplace'
 import SkillCard from '@/components/skill/SkillCard.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
 import Modal from '@/components/common/Modal.vue'
+import AgentIcon from '@/components/icons/AgentIcon.vue'
 import {
   RefreshCw,
   Filter,
@@ -15,6 +16,7 @@ import {
 import { useAgentsStore } from '@/stores/agents'
 import { useSkillsStore } from '@/stores/skills'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import type { Skill, SearchMode } from '@/types'
 
 const store = useMarketplaceStore()
@@ -24,8 +26,12 @@ const skillsStore = useSkillsStore()
 const showInstallModal = ref(false)
 const selectedSkill = ref<Skill | null>(null)
 const selectedAgents = ref<string[]>([])
+
 const installScope = ref<'project' | 'global'>('global')
 const installing = ref(false)
+const installLogs = ref<
+  Array<{ time: string; message: string; type: 'info' | 'error' | 'success' }>
+>([])
 const searchDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 onMounted(() => {
@@ -38,7 +44,7 @@ onMounted(() => {
 const skills = computed(() => store.filteredSkills)
 const isSkillsmpSelected = computed(() => store.selectedSource === 'skillsmp')
 const showNoApiKeyWarning = computed(
-  () => isSkillsmpSelected.value && !store.hasApiKey
+  () => isSkillsmpSelected.value && !store.hasApiKey,
 )
 
 // Debounced search for API
@@ -54,7 +60,7 @@ watch(
     searchDebounceTimer.value = setTimeout(() => {
       store.searchSkillsmp(query)
     }, 500)
-  }
+  },
 )
 
 async function handleRefresh() {
@@ -71,6 +77,7 @@ function toggleSearchMode() {
 }
 
 function openInstallModal(skill: Skill) {
+  installLogs.value = []
   selectedSkill.value = skill
   selectedAgents.value = agentsStore.agents
     .filter((a) => a.installed)
@@ -80,36 +87,124 @@ function openInstallModal(skill: Skill) {
     'Opening install modal for skill:',
     skill,
     'Available agents:',
-    agentsStore.agents
+    agentsStore.agents,
   )
+}
+
+function getLogTime() {
+  return new Date().toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
 }
 
 async function handleInstall() {
   if (!selectedSkill.value || selectedAgents.value.length === 0) return
 
   installing.value = true
-  console.log(
-    'Installing skill:',
-    selectedSkill.value,
-    'to agents:',
-    selectedAgents.value,
-    'scope:',
-    installScope.value
-  )
+  installLogs.value = []
+  installLogs.value.push({
+    time: getLogTime(),
+    message: 'Initializing installation...',
+    type: 'info',
+  })
+
+  // Set up event listener
+  let unlisten: (() => void) | undefined
+
   try {
-    const result = await invoke('install_skill', {
+    unlisten = await listen<{
+      skill: string
+      status: string
+      message: string
+      agent?: string
+    }>('install-progress', (event) => {
+      console.log('Install progress:', event.payload)
+      const type =
+        event.payload.status === 'error'
+          ? 'error'
+          : event.payload.status === 'finished'
+            ? 'success'
+            : 'info'
+      installLogs.value.push({
+        time: getLogTime(),
+        message: event.payload.message,
+        type,
+      })
+
+      // Auto-scroll to bottom of terminal
+      const terminal = document.getElementById('install-terminal')
+      if (terminal) {
+        setTimeout(() => {
+          terminal.scrollTop = terminal.scrollHeight
+        }, 10)
+      }
+    })
+
+    console.log(
+      'Installing skill:',
+      selectedSkill.value,
+      'to agents:',
+      selectedAgents.value,
+      'scope:',
+      installScope.value,
+    )
+
+    const results = await invoke<
+      Array<{
+        success: boolean
+        path: string
+        agent: string
+        error?: string
+      }>
+    >('install_skill', {
       skill: selectedSkill.value,
       agents: selectedAgents.value,
       scope: installScope.value,
     })
-    console.log('Install result:', result)
-    alert('Skill installed successfully!')
-    showInstallModal.value = false
-    skillsStore.fetchInstalledSkills()
+
+    console.log('Install results:', results)
+
+    const successful = results.filter((r) => r.success)
+    const failed = results.filter((r) => !r.success)
+
+    if (failed.length > 0) {
+      const errors = failed.map((f) => `${f.agent}: ${f.error}`).join('\n')
+      installLogs.value.push({
+        time: getLogTime(),
+        message: `Some installations failed: ${errors}`,
+        type: 'error',
+      })
+      if (successful.length === 0) {
+        throw new Error(`All installations failed:\n${errors}`)
+      }
+    }
+
+    if (successful.length > 0) {
+      installLogs.value.push({
+        time: getLogTime(),
+        message: 'Installation completed successfully.',
+        type: 'success',
+      })
+
+      // Short delay to let user see success before closing
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+
+      showInstallModal.value = false
+      skillsStore.fetchInstalledSkills()
+    }
   } catch (e) {
     console.error('Installation failed:', e)
-    alert(`Installation failed: ${e}`)
+    installLogs.value.push({
+      time: getLogTime(),
+      message: `Installation failed: ${e}`,
+      type: 'error',
+    })
+    // Don't alert here, let the logs show it
   } finally {
+    if (unlisten) unlisten()
     installing.value = false
   }
 }
@@ -264,75 +359,95 @@ async function handleUninstall(skillName: string) {
     <Modal
       :show="showInstallModal"
       :title="`Install ${selectedSkill?.name}`"
+      maxWidth="800px"
       @close="showInstallModal = false"
     >
-      <div class="install-form">
-        <p class="form-help">
-          Select the agents you want to install this skill to.
-        </p>
+      <div class="modal-content-grid">
+        <div class="install-form">
+          <p class="form-help">
+            Select the agents you want to install this skill to.
+          </p>
 
-        <div class="agent-selection">
-          <div
-            v-for="agent in agentsStore.agents"
-            :key="agent.agent_type"
-            class="agent-option"
-            :class="{
-              selected: selectedAgents.includes(agent.agent_type),
-              disabled: !agent.installed,
-            }"
-            @click="
-              agent.installed &&
+          <div class="agent-selection">
+            <div
+              v-for="agent in agentsStore.agents"
+              :key="agent.agent_type"
+              class="agent-option"
+              :class="{
+                selected: selectedAgents.includes(agent.agent_type),
+                disabled: !agent.installed,
+              }"
+              @click="
+                agent.installed &&
                 (selectedAgents.includes(agent.agent_type)
                   ? (selectedAgents = selectedAgents.filter(
-                      (a) => a !== agent.agent_type
+                      (a) => a !== agent.agent_type,
                     ))
                   : selectedAgents.push(agent.agent_type))
-            "
-          >
-            <span class="agent-icon">{{
-              agent.icon === 'Sparkles'
-                ? '✨'
-                : agent.icon === 'Terminal'
-                ? '💻'
-                : agent.icon === 'Bot'
-                ? '🤖'
-                : agent.icon === 'Code'
-                ? '📄'
-                : '🖱️'
-            }}</span>
-            <div class="agent-name">{{ agent.display_name }}</div>
-            <div
-              class="check-wrap"
-              v-if="selectedAgents.includes(agent.agent_type)"
+              "
             >
-              <CheckCircle2 :size="16" />
+              <AgentIcon
+                :type="agent.agent_type"
+                :size="18"
+                class="agent-icon"
+              />
+              <div class="agent-name">{{ agent.display_name }}</div>
+              <div
+                class="check-wrap"
+                v-if="selectedAgents.includes(agent.agent_type)"
+              >
+                <CheckCircle2 :size="16" />
+              </div>
+            </div>
+          </div>
+
+          <div class="scope-selection">
+            <label>Installation Scope</label>
+            <div class="scope-options">
+              <button
+                class="scope-btn"
+                :class="{ active: installScope === 'project' }"
+                @click="installScope = 'project'"
+              >
+                Project
+              </button>
+              <button
+                class="scope-btn"
+                :class="{ active: installScope === 'global' }"
+                @click="installScope = 'global'"
+              >
+                Global
+              </button>
             </div>
           </div>
         </div>
 
-        <div class="scope-selection">
-          <label>Installation Scope</label>
-          <div class="scope-options">
-            <button
-              class="scope-btn"
-              :class="{ active: installScope === 'project' }"
-              @click="installScope = 'project'"
+        <div class="install-terminal-container">
+          <div class="terminal-header">Installation Logs</div>
+          <div id="install-terminal" class="install-terminal">
+            <div v-if="installLogs.length === 0" class="terminal-placeholder">
+              Ready to install...
+            </div>
+            <div
+              v-else
+              v-for="(log, idx) in installLogs"
+              :key="idx"
+              class="log-line"
+              :class="log.type"
             >
-              Project
-            </button>
-            <button
-              class="scope-btn"
-              :class="{ active: installScope === 'global' }"
-              @click="installScope = 'global'"
-            >
-              Global
-            </button>
+              <span class="log-time">[{{ log.time }}]</span>
+              <span class="log-msg">{{ log.message }}</span>
+            </div>
           </div>
         </div>
       </div>
 
       <template #footer>
-        <button class="footer-btn secondary" @click="showInstallModal = false">
+        <button
+          class="footer-btn secondary"
+          @click="showInstallModal = false"
+          :disabled="installing"
+        >
           Cancel
         </button>
         <button
@@ -535,10 +650,116 @@ select {
 }
 
 /* Previous styles... */
+.modal-content-grid {
+  display: flex;
+  gap: 24px;
+  height: 400px;
+}
+
 .install-form {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.install-terminal-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #1e1e1e;
+  border-radius: var(--border-radius);
+  border: 1px solid #333;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.terminal-header {
+  padding: 8px 12px;
+  background-color: #252526;
+  border-bottom: 1px solid #333;
+  font-size: 11px;
+  font-weight: 600;
+  color: #cccccc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.terminal-header::before {
+  content: '';
+  display: block;
+  width: 8px;
+  height: 8px;
+  background-color: #22c55e;
+  border-radius: 50%;
+}
+
+.install-terminal {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  font-family:
+    'JetBrains Mono', 'Fira Code', 'SF Mono', 'Roboto Mono', 'Menlo', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #d4d4d4;
+}
+
+/* Custom Scrollbar for terminal */
+.install-terminal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.install-terminal::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.install-terminal::-webkit-scrollbar-thumb {
+  background-color: #424242;
+  border-radius: 4px;
+}
+
+.terminal-placeholder {
+  color: #6e7681;
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.log-line {
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.log-line:last-child {
+  border-bottom: none;
+}
+
+.log-line.error {
+  color: #f87171;
+}
+
+.log-line.success {
+  color: #4ade80;
+}
+
+.log-line.info {
+  color: #60a5fa;
+}
+
+.log-time {
+  color: #6e7681;
+  font-size: 11px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.log-msg {
+  word-break: break-word;
 }
 
 .form-help {

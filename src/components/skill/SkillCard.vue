@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Download, Trash2, ExternalLink, PlusCircle } from 'lucide-vue-next'
+import {
+  Download,
+  Trash2,
+  Folder,
+  PlusCircle,
+  ExternalLink,
+} from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import type { MarketplaceSkill, Skill } from '@/types'
 import { useSkillsStore } from '@/stores/skills'
 
@@ -18,22 +25,53 @@ const emit = defineEmits<{
 
 const skillsStore = useSkillsStore()
 const isInstalled = computed(() => skillsStore.isInstalled(props.skill.name))
-const installedVersion = computed(
-  () => skillsStore.getSkillByName(props.skill.name)?.installed_version
+const installedSkill = computed(() =>
+  skillsStore.getSkillByName(props.skill.name),
 )
+const installedVersion = computed(() => installedSkill.value?.installed_version)
+
 const hasUpdate = computed(() => {
   if (!isInstalled.value || !props.skill.version || !installedVersion.value)
     return false
   return props.skill.version !== installedVersion.value
 })
 
-const handleOpenInEditor = async () => {
+// Get the external URL (GitHub or SkillsMP page)
+const externalUrl = computed(() => {
+  const skill = props.skill as MarketplaceSkill
+  // Priority: repo_url (GitHub) > skillUrl (SkillsMP page) > metadata.repo_url
+  return (
+    skill.repo_url ||
+    skill.metadata?.skillUrl ||
+    skill.metadata?.repo_url ||
+    null
+  )
+})
+
+// Open the installed skill's directory
+const handleOpenFolder = async () => {
   try {
-    // If it's an installed skill, we might need to find its actual path
-    // But Skill model already includes path.
-    await invoke('open_in_editor', { path: props.skill.path })
+    // Use the installed skill's path, not the marketplace skill's path (which is a URL)
+    const pathToOpen = installedSkill.value?.path
+    if (pathToOpen) {
+      await invoke('open_in_explorer', { path: pathToOpen })
+    } else {
+      alert('Could not find installed skill path')
+    }
   } catch (e) {
-    alert(`Failed to open in editor: ${e}`)
+    alert(`Failed to open folder: ${e}`)
+  }
+}
+
+// Open external link (GitHub or SkillsMP page)
+const handleOpenExternal = async () => {
+  if (externalUrl.value) {
+    try {
+      await openUrl(externalUrl.value)
+    } catch (e) {
+      // Fallback to window.open
+      window.open(externalUrl.value, '_blank')
+    }
   }
 }
 </script>
@@ -66,14 +104,26 @@ const handleOpenInEditor = async () => {
       </div>
 
       <div class="action-btns">
+        <!-- External link button -->
         <button
-          v-if="isInstalled"
+          v-if="externalUrl"
           class="icon-btn secondary"
-          title="Open in Editor"
-          @click="handleOpenInEditor"
+          title="Open in browser"
+          @click="handleOpenExternal"
         >
           <ExternalLink :size="16" />
         </button>
+
+        <!-- Open installed folder button -->
+        <button
+          v-if="isInstalled"
+          class="icon-btn secondary"
+          title="Open install folder"
+          @click="handleOpenFolder"
+        >
+          <Folder :size="16" />
+        </button>
+
         <button
           v-if="isInstalled && hasUpdate"
           class="update-btn"

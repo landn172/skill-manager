@@ -88,7 +88,7 @@ pub fn default_sources() -> Vec<MarketplaceSource> {
             url: "https://skillsmp.com/api/v1".into(),
             description: Some("Skills Marketplace API with 65,000+ indexed skills".into()),
             official: false,
-            enabled: false,
+            enabled: true, // DEBUG: Enable by default
             last_fetched: None,
             source_type: SourceType::Api,
         },
