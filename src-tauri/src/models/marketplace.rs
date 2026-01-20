@@ -9,6 +9,7 @@ pub enum SourceType {
     #[default]
     Api, // SkillsMP API
     Local, // Local directory
+    Registry, // Remote JSON registry
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,7 +88,7 @@ pub fn default_sources() -> Vec<MarketplaceSource> {
             url: "https://skillsmp.com/api/v1".into(),
             description: Some("Skills Marketplace API with 65,000+ indexed skills".into()),
             official: false,
-            enabled: true,
+            enabled: false,
             last_fetched: None,
             source_type: SourceType::Api,
         },

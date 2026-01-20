@@ -26,6 +26,44 @@ export const useMarketplaceStore = defineStore('marketplace', {
 
       if (state.selectedSource) {
         result = result.filter((s) => s.source_id === state.selectedSource)
+      } else {
+        // Deduplication priority: Official > Local > Registry > Git > API
+        const priorityMap: Record<string, number> = {
+          local: 90,
+          registry: 80,
+          git: 70,
+          api: 60,
+        }
+
+        const uniqueSkills = new Map<string, MarketplaceSkill>()
+
+        for (const skill of result) {
+          const source = state.sources.find((s) => s.id === skill.source_id)
+          // If source not found (shouldn't happen), skip or keep
+          if (!source) continue
+
+          const existing = uniqueSkills.get(skill.name)
+          let skillPriority = priorityMap[source.source_type] || 0
+          if (source.official) skillPriority = 100
+
+          if (!existing) {
+            uniqueSkills.set(skill.name, skill)
+          } else {
+            const existingSource = state.sources.find(
+              (s) => s.id === existing.source_id,
+            )
+            let existingPriority = 0
+            if (existingSource) {
+              existingPriority = priorityMap[existingSource.source_type] || 0
+              if (existingSource.official) existingPriority = 100
+            }
+
+            if (skillPriority > existingPriority) {
+              uniqueSkills.set(skill.name, skill)
+            }
+          }
+        }
+        result = Array.from(uniqueSkills.values())
       }
 
       // Only filter locally if using keyword mode and not searching via API
@@ -34,7 +72,7 @@ export const useMarketplaceStore = defineStore('marketplace', {
         result = result.filter(
           (s) =>
             s.name.toLowerCase().includes(query) ||
-            s.description.toLowerCase().includes(query)
+            s.description.toLowerCase().includes(query),
         )
       }
 
@@ -105,15 +143,15 @@ export const useMarketplaceStore = defineStore('marketplace', {
               {
                 sourceId: source.id,
                 forceRefresh,
-              }
+              },
             )
 
             // Merge results, avoiding duplicates
             const existingIds = new Set(
-              this.skills.map((s) => s.name + s.source_id)
+              this.skills.map((s) => s.name + s.source_id),
             )
             const uniqueSkills = newSkills.filter(
-              (s) => !existingIds.has(s.name + s.source_id)
+              (s) => !existingIds.has(s.name + s.source_id),
             )
             this.skills.push(...uniqueSkills)
           } catch (e) {
@@ -148,22 +186,15 @@ export const useMarketplaceStore = defineStore('marketplace', {
             'search_skillsmp_ai',
             {
               query,
-            }
+            },
           )
           // Replace skills with search results
           this.skills = this.skills.filter((s) => s.source_id !== 'skillsmp')
           this.skills.push(...results)
         } else {
-          // Keyword search
-          const results = await invoke<MarketplaceSkill[]>(
-            'fetch_skillsmp_skills',
-            {
-              query,
-              page: 1,
-              limit: 50,
-              sortBy: 'stars',
-            }
-          )
+          // Keyword search using WebView Proxy to bypass Cloudflare
+          const results = await this.fetchSkillsmpViaProxy(query)
+
           // Replace skills with search results
           this.skills = this.skills.filter((s) => s.source_id !== 'skillsmp')
           this.skills.push(...results)
@@ -175,6 +206,89 @@ export const useMarketplaceStore = defineStore('marketplace', {
       }
     },
 
+    /**
+     * Fetch SkillsMP via a separate WebView to bypass Cloudflare JA3/Challenge
+     */
+    async fetchSkillsmpViaProxy(query: string): Promise<MarketplaceSkill[]> {
+      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
+      const { emit, listen } = await import('@tauri-apps/api/event')
+
+      // Get API Key from Rust store
+      const apiKey = await invoke<string | null>('get_skillsmp_api_key')
+      if (!apiKey) {
+        throw new Error('SkillsMP API key not configured.')
+      }
+
+      const label = 'skillsmp-proxy'
+      let webview = await WebviewWindow.getByLabel(label)
+
+      if (!webview) {
+        // Create the proxy window if it doesn't exist
+        webview = new WebviewWindow(label, {
+          url: '/proxy.html', // Local asset
+          visible: false,
+          title: 'SkillsMP Cloudflare Proxy',
+          width: 500,
+          height: 600,
+        })
+      }
+
+      const reqId = Math.random().toString(36).substring(7)
+      const url = `https://skillsmp.com/api/v1/skills/search?q=${encodeURIComponent(query)}&page=1&limit=50&sortBy=stars`
+
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Proxy fetch timed out'))
+        }, 45000)
+
+        const unlistens: any[] = []
+
+        // Listen for response from proxy
+        listen('proxy-response', (event: any) => {
+          const payload = event.payload
+          if (payload.reqId !== reqId) return
+
+          clearTimeout(timeout)
+          unlistens.forEach((f) => f())
+
+          if (payload.success) {
+            const skillsmpResults = payload.data.data || []
+            const formatted = skillsmpResults.map((s: any) => ({
+              name: s.name,
+              description: s.description || '',
+              path: s.url || '',
+              source_id: 'skillsmp',
+              source_name: 'SkillsMP',
+              stars: s.stars || 0,
+              repo: s.repo,
+              repo_url: s.repo ? `https://github.com/${s.repo}` : undefined,
+              tags: [],
+            }))
+            resolve(formatted)
+          } else {
+            reject(new Error(payload.error))
+          }
+        }).then((u) => unlistens.push(u))
+
+        listen('proxy-challenge', (event: any) => {
+          if (event.payload.reqId !== reqId) return
+
+          // Window is already shown by proxy.html logica
+          alert(
+            'Cloudflare challenge detected. Please solve it in the popup and click Search again.',
+          )
+          clearTimeout(timeout)
+          unlistens.forEach((f) => f())
+          reject(new Error('CHALLENGE_REQUIRED'))
+        }).then((u) => unlistens.push(u))
+
+        // Give the proxy a moment to load
+        setTimeout(() => {
+          emit('proxy-request', { url, apiKey, reqId })
+        }, 1000)
+      })
+    },
+
     async refreshAll() {
       return this.fetchSkills(undefined, true)
     },
@@ -184,9 +298,34 @@ export const useMarketplaceStore = defineStore('marketplace', {
     },
 
     // Placeholder for adding custom sources (to be implemented)
-    async addSource() {
-      // TODO: Open a modal to add custom Git sources
-      alert('Custom source management coming soon!')
+    async addSource(url: string, name: string) {
+      try {
+        this.sources = await invoke('add_marketplace_source', { url, name })
+      } catch (e) {
+        console.error('Failed to add source:', e)
+        throw e
+      }
+    },
+
+    async removeSource(id: string) {
+      try {
+        this.sources = await invoke('remove_marketplace_source', { id })
+      } catch (e) {
+        console.error('Failed to remove source:', e)
+        throw e
+      }
+    },
+
+    async toggleSource(id: string, enabled: boolean) {
+      try {
+        this.sources = await invoke('toggle_marketplace_source', {
+          id,
+          enabled,
+        })
+      } catch (e) {
+        console.error('Failed to toggle source:', e)
+        throw e
+      }
     },
   },
 })

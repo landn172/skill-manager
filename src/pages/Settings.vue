@@ -34,10 +34,10 @@ const isFromEnv = computed(() => apiKeySource.value === 'env')
 async function loadApiKey() {
   try {
     maskedApiKey.value = await invoke<string | null>(
-      'get_skillsmp_api_key_masked'
+      'get_skillsmp_api_key_masked',
     )
     apiKeySource.value = await invoke<string | null>(
-      'get_skillsmp_api_key_source'
+      'get_skillsmp_api_key_source',
     )
   } catch (e) {
     console.error('Failed to load API key', e)
@@ -60,10 +60,53 @@ async function saveApiKey() {
   }
 }
 
+const showAddRegistryModal = ref(false)
+const registryUrl = ref('')
+const registryName = ref('')
+const addingRegistry = ref(false)
+
+async function saveRegistrySource() {
+  if (!registryUrl.value.trim() || !registryName.value.trim()) return
+
+  addingRegistry.value = true
+  try {
+    await marketplaceStore.addSource(
+      registryUrl.value.trim(),
+      registryName.value.trim(),
+    )
+    showAddRegistryModal.value = false
+    registryUrl.value = ''
+    registryName.value = ''
+    alert('Registry source added successfully!')
+  } catch (e) {
+    alert(`Failed to add registry source: ${e}`)
+  } finally {
+    addingRegistry.value = false
+  }
+}
+
+async function removeSource(id: string) {
+  if (!confirm('Are you sure you want to remove this source?')) return
+  try {
+    await marketplaceStore.removeSource(id)
+  } catch (e) {
+    alert(`Failed to remove source: ${e}`)
+  }
+}
+
+async function toggleSource(id: string, event: Event) {
+  const checkbox = event.target as HTMLInputElement
+  try {
+    await marketplaceStore.toggleSource(id, checkbox.checked)
+  } catch (e) {
+    alert(`Failed to toggle source: ${e}`)
+    checkbox.checked = !checkbox.checked // Revert
+  }
+}
 async function clearApiKey() {
   if (
     !confirm(
-      'Are you sure you want to remove your SkillsMP API key from Settings?'
+      'Are you sure you want to remove your SkillsMP API key from Settings?',
     )
   )
     return
@@ -181,12 +224,12 @@ const handleAddProject = async () => {
                 agent.icon === 'Sparkles'
                   ? '✨'
                   : agent.icon === 'Terminal'
-                  ? '💻'
-                  : agent.icon === 'Bot'
-                  ? '🤖'
-                  : agent.icon === 'Code'
-                  ? '📄'
-                  : '🖱️'
+                    ? '💻'
+                    : agent.icon === 'Bot'
+                      ? '🤖'
+                      : agent.icon === 'Code'
+                        ? '📄'
+                        : '🖱️'
               }}</span>
               <div class="agent-details">
                 <span class="agent-name">{{ agent.display_name }}</span>
@@ -221,6 +264,7 @@ const handleAddProject = async () => {
             v-for="source in marketplaceStore.sources"
             :key="source.id"
             class="source-card"
+            :class="{ disabled: !source.enabled }"
           >
             <div class="source-info">
               <div class="source-name-row">
@@ -231,25 +275,82 @@ const handleAddProject = async () => {
                 <span v-if="source.source_type === 'api'" class="api-badge"
                   >API</span
                 >
+                <span
+                  v-if="source.source_type === 'registry'"
+                  class="registry-badge"
+                  >Registry</span
+                >
               </div>
               <span class="source-url">{{ source.url }}</span>
             </div>
             <div class="source-actions">
+              <!-- Enabled Toggle -->
+              <label class="toggle-switch">
+                <input
+                  type="checkbox"
+                  :checked="source.enabled"
+                  @change="(e) => toggleSource(source.id, e)"
+                />
+                <span class="slider round"></span>
+              </label>
+
               <button
                 class="icon-btn delete"
                 v-if="!source.official && source.source_type !== 'api'"
+                @click="removeSource(source.id)"
               >
                 <Trash2 :size="18" />
               </button>
             </div>
           </div>
 
-          <button class="add-btn" @click="marketplaceStore.addSource">
-            <Plus :size="18" />
-            <span>Add Custom Source</span>
-          </button>
+          <div class="add-buttons">
+            <button class="add-btn" @click="showAddRegistryModal = true">
+              <Plus :size="18" />
+              <span>Add Registry Source</span>
+            </button>
+          </div>
         </div>
       </section>
+
+      <!-- Add Registry Modal -->
+      <div v-if="showAddRegistryModal" class="modal-overlay">
+        <div class="modal-content">
+          <h3>Add Registry Source</h3>
+          <p>Add a remote JSON registry to discover skills.</p>
+
+          <div class="form-group">
+            <label>Registry Name</label>
+            <input
+              v-model="registryName"
+              placeholder="e.g. My Team Skills"
+              class="input-field"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Registry JSON URL</label>
+            <input
+              v-model="registryUrl"
+              placeholder="https://..."
+              class="input-field"
+            />
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-secondary" @click="showAddRegistryModal = false">
+              Cancel
+            </button>
+            <button
+              class="btn-primary"
+              :disabled="!registryName || !registryUrl || addingRegistry"
+              @click="saveRegistrySource"
+            >
+              {{ addingRegistry ? 'Adding...' : 'Add Source' }}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <section class="settings-section">
         <div class="section-header">
@@ -466,6 +567,129 @@ h2 {
   border-radius: 4px;
 }
 
+.registry-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--accent-info);
+  background-color: rgba(59, 130, 246, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  margin-right: 8px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-tertiary);
+  transition: 0.4s;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+}
+
+.slider:before {
+  position: absolute;
+  content: '';
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 2px;
+  background-color: var(--text-muted);
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+  background-color: white;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: var(--bg-primary);
+  padding: 24px;
+  border-radius: var(--border-radius);
+  width: 400px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-content h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-hover);
+}
+
 /* Existing Styles */
 .agents-list,
 .sources-list {
@@ -483,6 +707,10 @@ h2 {
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   padding: 16px;
+}
+
+.source-card.disabled {
+  opacity: 0.7;
 }
 
 .agent-info {

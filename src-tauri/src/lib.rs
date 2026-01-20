@@ -44,6 +44,9 @@ pub fn run() {
             // Marketplace
             get_marketplace_sources,
             fetch_marketplace_skills,
+            add_marketplace_source,
+            remove_marketplace_source,
+            toggle_marketplace_source,
             // SkillsMP API
             get_skillsmp_api_key,
             get_skillsmp_api_key_masked,

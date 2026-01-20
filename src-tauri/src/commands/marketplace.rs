@@ -1,3 +1,4 @@
+use crate::commands::registry::fetch_registry_skills;
 use crate::commands::skills::discover_skills;
 use crate::commands::skillsmp::fetch_skillsmp_skills;
 use crate::models::marketplace::{
@@ -6,10 +7,110 @@ use crate::models::marketplace::{
 use crate::utils::git::{clone_repo, parse_source};
 use tokio::fs;
 
+use crate::utils::db;
+use std::collections::HashMap;
+
+const CUSTOM_SOURCES_KEY: &str = "custom_marketplace_sources";
+const SOURCE_STATES_KEY: &str = "marketplace_source_states";
+
 #[tauri::command]
 pub async fn get_marketplace_sources() -> Result<Vec<MarketplaceSource>, String> {
-    // Return default sources (SkillsMP API + Official Git repos)
-    Ok(default_sources())
+    let mut sources = default_sources();
+
+    // Load custom sources
+    if let Ok(Some(json)) = db::get_config(CUSTOM_SOURCES_KEY) {
+        if let Ok(custom_sources) = serde_json::from_str::<Vec<MarketplaceSource>>(&json) {
+            sources.extend(custom_sources);
+        }
+    }
+
+    // Load source states (enabled/disabled)
+    if let Ok(Some(json)) = db::get_config(SOURCE_STATES_KEY) {
+        if let Ok(states) = serde_json::from_str::<HashMap<String, bool>>(&json) {
+            for source in &mut sources {
+                if let Some(enabled) = states.get(&source.id) {
+                    source.enabled = *enabled;
+                }
+            }
+        }
+    }
+
+    Ok(sources)
+}
+
+#[tauri::command]
+pub async fn add_marketplace_source(
+    url: String,
+    name: String,
+) -> Result<Vec<MarketplaceSource>, String> {
+    // Use timestamp for ID generation to avoid adding md5 dependency
+    let id = format!("custom_{}", chrono::Utc::now().timestamp_millis());
+
+    let new_source = MarketplaceSource {
+        id,
+        name,
+        url,
+        description: Some("Custom registry source".into()),
+        official: false,
+        enabled: true,
+        last_fetched: None,
+        source_type: SourceType::Registry,
+    };
+
+    let mut custom_sources = Vec::new();
+    if let Ok(Some(json)) = db::get_config(CUSTOM_SOURCES_KEY) {
+        if let Ok(existing) = serde_json::from_str::<Vec<MarketplaceSource>>(&json) {
+            custom_sources = existing;
+        }
+    }
+
+    custom_sources.push(new_source);
+
+    let json = serde_json::to_string(&custom_sources).map_err(|e| e.to_string())?;
+    db::set_config(CUSTOM_SOURCES_KEY, &json)?;
+
+    get_marketplace_sources().await
+}
+
+#[tauri::command]
+pub async fn remove_marketplace_source(id: String) -> Result<Vec<MarketplaceSource>, String> {
+    let mut custom_sources = Vec::new();
+    if let Ok(Some(json)) = db::get_config(CUSTOM_SOURCES_KEY) {
+        if let Ok(existing) = serde_json::from_str::<Vec<MarketplaceSource>>(&json) {
+            custom_sources = existing;
+        }
+    }
+
+    // Remove from custom sources
+    custom_sources.retain(|s| s.id != id);
+
+    let json = serde_json::to_string(&custom_sources).map_err(|e| e.to_string())?;
+    db::set_config(CUSTOM_SOURCES_KEY, &json)?;
+
+    // Also remove from states if exists
+    // (Optional cleanup)
+
+    get_marketplace_sources().await
+}
+
+#[tauri::command]
+pub async fn toggle_marketplace_source(
+    id: String,
+    enabled: bool,
+) -> Result<Vec<MarketplaceSource>, String> {
+    let mut states = HashMap::new();
+    if let Ok(Some(json)) = db::get_config(SOURCE_STATES_KEY) {
+        if let Ok(existing) = serde_json::from_str::<HashMap<String, bool>>(&json) {
+            states = existing;
+        }
+    }
+
+    states.insert(id, enabled);
+
+    let json = serde_json::to_string(&states).map_err(|e| e.to_string())?;
+    db::set_config(SOURCE_STATES_KEY, &json)?;
+
+    get_marketplace_sources().await
 }
 
 #[tauri::command]
@@ -60,6 +161,28 @@ pub async fn fetch_marketplace_skills(
                 // Handle Git and Local sources (existing logic)
                 let skills = fetch_git_source(&source, &cache_dir, &repos_dir, force_refresh).await;
                 all_skills.extend(skills);
+            }
+            SourceType::Registry => {
+                match fetch_registry_skills(source.url.clone()).await {
+                    Ok(skills) => {
+                        // Overwrite source info with actual source details
+                        let skills = skills
+                            .into_iter()
+                            .map(|mut s| {
+                                s.source_id = source.id.clone();
+                                s.source_name = source.name.clone();
+                                s
+                            })
+                            .collect::<Vec<_>>();
+                        all_skills.extend(skills);
+                    }
+                    Err(e) => {
+                        println!(
+                            "Failed to fetch from Registry source {}: {}",
+                            source.name, e
+                        );
+                    }
+                }
             }
         }
     }

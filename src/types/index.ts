@@ -34,7 +34,7 @@ export interface InstalledSkill extends Skill {
 }
 
 // Source types for marketplace
-export type SourceType = 'git' | 'api' | 'local'
+export type SourceType = 'git' | 'api' | 'local' | 'registry'
 export type SearchMode = 'keyword' | 'ai'
 
 export interface MarketplaceSource {
