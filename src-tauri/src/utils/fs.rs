@@ -36,3 +36,23 @@ pub async fn copy_dir_recursive(
     }
     Ok(())
 }
+
+#[cfg(target_os = "macos")]
+pub async fn remove_quarantine(path: impl AsRef<Path>) -> Result<(), String> {
+    use tokio::process::Command;
+    let path_str = path.as_ref().to_string_lossy();
+
+    // xattr -d -r com.apple.quarantine <path>
+    // We ignore errors because the attribute might not exist.
+    let _ = Command::new("xattr")
+        .args(&["-d", "-r", "com.apple.quarantine", &path_str])
+        .output()
+        .await;
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub async fn remove_quarantine(_path: impl AsRef<Path>) -> Result<(), String> {
+    Ok(())
+}

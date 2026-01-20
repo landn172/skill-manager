@@ -1,7 +1,7 @@
 use crate::models::agent::{AgentConfig, AgentType};
 use crate::models::skill::{InstallScope, Skill};
 use crate::utils::db::log_action;
-use crate::utils::fs::copy_dir_recursive;
+use crate::utils::fs::{copy_dir_recursive, remove_quarantine};
 use crate::utils::git::{clone_repo, parse_source};
 use tokio::fs;
 
@@ -198,6 +198,9 @@ pub async fn install_skill(
 
         match copy_dir_recursive(&source_path, &target_dir).await {
             Ok(_) => {
+                // Remove quarantine on macOS to avoid permissions issues
+                let _ = remove_quarantine(&target_dir).await;
+
                 results.push(InstallResult {
                     success: true,
                     path: target_dir.to_str().unwrap_or_default().to_string(),
