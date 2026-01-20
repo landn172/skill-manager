@@ -44,6 +44,14 @@ npm run tauri dev
 - **Frontend**: Vue 3, Pinia, Vite, TypeScript, Lucide Icons.
 - **Backend**: Rust, Tauri, Reqwest (HTTP), Tokios (Async), Zip Extraction.
 
+## 🛠️ Troubleshooting (macOS)
+
+If you encounter an "App is damaged" or "Cannot be opened" error on macOS after downloading, you can resolve it by removing the quarantine attribute:
+
+```bash
+sudo xattr -rd com.apple.quarantine /Applications/Skill\ Manager.app
+```
+
 ## 📄 License
 
 MIT
