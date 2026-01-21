@@ -9,14 +9,21 @@ import {
 } from 'lucide-vue-next'
 import { useProjectStore } from '@/stores/project'
 import { useSkillsStore } from '@/stores/skills'
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
+import { getVersion } from '@tauri-apps/api/app'
 
 const route = useRoute()
 const projectStore = useProjectStore()
 const skillsStore = useSkillsStore()
+const appVersion = ref('...')
 
-onMounted(() => {
+onMounted(async () => {
   projectStore.fetchProjects()
+  try {
+    appVersion.value = await getVersion()
+  } catch (e) {
+    appVersion.value = '?.?.?'
+  }
 })
 
 const handleProjectChange = (projectId: string) => {
@@ -25,7 +32,7 @@ const handleProjectChange = (projectId: string) => {
     skillsStore.fetchInstalledSkills('global')
   } else {
     const project = projectStore.projects.find(
-      (p) => p.id?.toString() === projectId
+      (p) => p.id?.toString() === projectId,
     )
     if (project) {
       projectStore.setCurrentProject(project)
@@ -53,7 +60,9 @@ const navItems = [
       <div class="select-wrapper">
         <select
           :value="projectStore.currentProject?.id || 'global'"
-          @change="(e) => handleProjectChange((e.target as HTMLSelectElement).value)"
+          @change="
+            (e) => handleProjectChange((e.target as HTMLSelectElement).value)
+          "
         >
           <option value="global">🌐 Global Scope</option>
           <optgroup v-if="projectStore.projects.length" label="Projects">
@@ -84,7 +93,7 @@ const navItems = [
     </nav>
 
     <div class="footer">
-      <div class="version">v1.0.0</div>
+      <div class="version">v{{ appVersion }}</div>
     </div>
   </aside>
 </template>
