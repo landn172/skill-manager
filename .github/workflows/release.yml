@@ -4,7 +4,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   test-and-lint:
@@ -15,7 +15,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: 'npm'
+          cache: "npm"
       - name: install dependencies
         run: npm install
       - name: lint
@@ -35,9 +35,9 @@ jobs:
           - platform: macos-15
             args: --target universal-apple-darwin
           - platform: ubuntu-latest
-            args: ''
+            args: ""
           - platform: windows-latest
-            args: ''
+            args: ""
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: 'npm'
+          cache: "npm"
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -65,8 +65,8 @@ jobs:
           SKILLSMP_API_KEY: ${{ secrets.SKILLSMP_API_KEY }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'Skill Manager ${{ github.ref_name }}'
-          releaseBody: 'Automated release of Skill Manager ${{ github.ref_name }}.'
+          releaseName: "Skill Manager ${{ github.ref_name }}"
+          releaseBody: "Automated release of Skill Manager ${{ github.ref_name }}."
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

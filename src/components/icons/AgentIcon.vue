@@ -1,37 +1,30 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from "vue";
 
 const props = defineProps<{
-  type: string
-  size?: number | string
-}>()
+  type: string;
+  size?: number | string;
+}>();
 
 const iconSize = computed(() => {
-  const s = props.size || 24
-  return typeof s === 'number' ? `${s}px` : s
-})
+  const s = props.size || 24;
+  return typeof s === "number" ? `${s}px` : s;
+});
 const isImage = computed(() => {
   return (
-    props.type.startsWith('data:image/') ||
-    props.type.startsWith('http') ||
-    props.type.includes('/') ||
-    props.type.includes('\\')
-  )
-})
+    props.type.startsWith("data:image/") ||
+    props.type.startsWith("http") ||
+    props.type.includes("/") ||
+    props.type.includes("\\")
+  );
+});
 
 const isEmoji = computed(() => {
-  if (isImage.value) return false
+  if (isImage.value) return false;
   // Basic emoji check: single character or short string that doesn't match known types
-  const knownTypes = [
-    'vscode',
-    'cursor',
-    'gemini',
-    'claude-code',
-    'codex',
-    'opencode',
-  ]
-  return !knownTypes.includes(props.type) && props.type.length <= 8
-})
+  const knownTypes = ["vscode", "cursor", "gemini", "claude-code", "codex", "opencode"];
+  return !knownTypes.includes(props.type) && props.type.length <= 8;
+});
 </script>
 
 <template>
@@ -39,11 +32,7 @@ const isEmoji = computed(() => {
     <img :src="type" :style="{ width: iconSize, height: iconSize }" alt="" />
   </div>
 
-  <div
-    v-else-if="isEmoji"
-    class="agent-icon-emoji"
-    :style="{ fontSize: iconSize }"
-  >
+  <div v-else-if="isEmoji" class="agent-icon-emoji" :style="{ fontSize: iconSize }">
     {{ type }}
   </div>
 

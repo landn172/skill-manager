@@ -1,39 +1,39 @@
 <script setup lang="ts">
-import { Pencil, Trash2, PlusCircle } from 'lucide-vue-next'
-import { invoke } from '@tauri-apps/api/core'
-import type { InstalledSkill } from '@/types'
-import AgentIcon from '@/components/icons/AgentIcon.vue'
-import { useAgentsStore } from '@/stores/agents'
+import { Pencil, Trash2, PlusCircle } from "lucide-vue-next";
+import { invoke } from "@tauri-apps/api/core";
+import type { InstalledSkill } from "@/types";
+import AgentIcon from "@/components/icons/AgentIcon.vue";
+import { useAgentsStore } from "@/stores/agents";
 
-const agentsStore = useAgentsStore()
+const agentsStore = useAgentsStore();
 
 defineProps<{
-  skills: InstalledSkill[]
-}>()
+  skills: InstalledSkill[];
+}>();
 
 const emit = defineEmits<{
-  (e: 'edit', skill: InstalledSkill): void
-  (e: 'uninstall', skill: InstalledSkill): void
-  (e: 'install', skill: InstalledSkill): void
-}>()
+  (e: "edit", skill: InstalledSkill): void;
+  (e: "uninstall", skill: InstalledSkill): void;
+  (e: "install", skill: InstalledSkill): void;
+}>();
 
 const handleOpenInAgent = async (skill: InstalledSkill, agent: string) => {
-  const path = skill.agent_paths?.[agent] || skill.path
-  if (!path) return
+  const path = skill.agent_paths?.[agent] || skill.path;
+  if (!path) return;
 
   try {
-    await invoke('open_in_agent', { path, agent })
+    await invoke("open_in_agent", { path, agent });
   } catch (e) {
-    alert(`Failed to open in agent: ${e}`)
+    alert(`Failed to open in agent: ${e}`);
   }
-}
+};
 
 const canInstallMore = (skill: InstalledSkill) => {
   // Check if there are any installed agents in the system that don't have this skill
-  const allInstalledAgents = agentsStore.agents.filter((a) => a.installed)
-  const skillAgents = skill.agents || []
-  return allInstalledAgents.length > skillAgents.length
-}
+  const allInstalledAgents = agentsStore.agents.filter((a) => a.installed);
+  const skillAgents = skill.agents || [];
+  return allInstalledAgents.length > skillAgents.length;
+};
 </script>
 
 <template>
@@ -67,18 +67,10 @@ const canInstallMore = (skill: InstalledSkill) => {
           <PlusCircle :size="18" />
         </button>
 
-        <button
-          class="action-btn edit"
-          @click="emit('edit', skill)"
-          title="Edit SKILL.md"
-        >
+        <button class="action-btn edit" @click="emit('edit', skill)" title="Edit SKILL.md">
           <Pencil :size="18" />
         </button>
-        <button
-          class="action-btn delete"
-          @click="emit('uninstall', skill)"
-          title="Uninstall"
-        >
+        <button class="action-btn delete" @click="emit('uninstall', skill)" title="Uninstall">
           <Trash2 :size="18" />
         </button>
       </div>

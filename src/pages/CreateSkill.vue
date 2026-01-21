@@ -1,34 +1,34 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { invoke } from '@tauri-apps/api/core'
-import { open } from '@tauri-apps/plugin-dialog'
-import { homeDir } from '@tauri-apps/api/path'
-import { ChevronRight, Save, Folder, FileCode } from 'lucide-vue-next'
+import { ref, computed, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { homeDir } from "@tauri-apps/api/path";
+import { ChevronRight, Save, Folder, FileCode } from "lucide-vue-next";
 
-const router = useRouter()
-const route = useRoute()
+const router = useRouter();
+const route = useRoute();
 
-const step = ref(1)
-const creating = ref(false)
+const step = ref(1);
+const creating = ref(false);
 const form = ref({
-  name: '',
-  description: '',
-  parentPath: '',
-})
+  name: "",
+  description: "",
+  parentPath: "",
+});
 
 // Edit mode: read from query params
-const isEditMode = computed(() => !!route.query.edit)
-const editSkillPath = computed(() => (route.query.path as string) || '')
+const isEditMode = computed(() => !!route.query.edit);
+const editSkillPath = computed(() => (route.query.path as string) || "");
 
 onMounted(() => {
   // If editing, populate form from query params
   if (isEditMode.value) {
-    form.value.name = (route.query.name as string) || ''
-    form.value.description = (route.query.description as string) || ''
-    form.value.parentPath = editSkillPath.value // Use skill path as parentPath for display
+    form.value.name = (route.query.name as string) || "";
+    form.value.description = (route.query.description as string) || "";
+    form.value.parentPath = editSkillPath.value; // Use skill path as parentPath for display
   }
-})
+});
 
 async function selectParentPath() {
   try {
@@ -36,51 +36,51 @@ async function selectParentPath() {
       directory: true,
       multiple: false,
       defaultPath: await homeDir(),
-    })
+    });
 
-    if (selected && typeof selected === 'string') {
-      form.value.parentPath = selected
+    if (selected && typeof selected === "string") {
+      form.value.parentPath = selected;
     }
   } catch (e) {
-    console.error('Failed to select directory', e)
+    console.error("Failed to select directory", e);
   }
 }
 
 async function handleSubmit() {
-  creating.value = true
+  creating.value = true;
   try {
     if (isEditMode.value) {
       // Update existing skill
-      await invoke('update_local_skill', {
+      await invoke("update_local_skill", {
         skillPath: editSkillPath.value,
         name: form.value.name || undefined,
         description: form.value.description || undefined,
-      })
-      alert('Skill updated successfully!')
-      router.push('/marketplace')
+      });
+      alert("Skill updated successfully!");
+      router.push("/marketplace");
     } else {
       // Create new skill
       const result = await invoke<{
-        success: boolean
-        path: string
-        message: string
-      }>('create_skill', {
+        success: boolean;
+        path: string;
+        message: string;
+      }>("create_skill", {
         name: form.value.name,
         description: form.value.description,
         parentPath: form.value.parentPath,
-      })
+      });
 
       if (result.success) {
-        alert(`Skill created successfully at ${result.path}`)
-        router.push('/installed')
+        alert(`Skill created successfully at ${result.path}`);
+        router.push("/installed");
       } else {
-        throw new Error(result.message)
+        throw new Error(result.message);
       }
     }
   } catch (e) {
-    alert(`Failed to ${isEditMode.value ? 'update' : 'create'} skill: ${e}`)
+    alert(`Failed to ${isEditMode.value ? "update" : "create"} skill: ${e}`);
   } finally {
-    creating.value = false
+    creating.value = false;
   }
 }
 </script>
@@ -88,7 +88,7 @@ async function handleSubmit() {
 <template>
   <div class="create-skill-page">
     <header class="header">
-      <h1>{{ isEditMode ? 'Edit Skill' : 'Create New Skill' }}</h1>
+      <h1>{{ isEditMode ? "Edit Skill" : "Create New Skill" }}</h1>
       <div v-if="!isEditMode" class="steps">
         <div class="step" :class="{ active: step >= 1 }">1</div>
         <div class="step-line"></div>
@@ -100,8 +100,8 @@ async function handleSubmit() {
       <div v-if="!isEditMode" class="intro-box">
         <FileCode :size="24" class="intro-icon" />
         <p>
-          Scaffold a new skill directory with a standard structure (README,
-          Instructions) to start building your own agent skill.
+          Scaffold a new skill directory with a standard structure (README, Instructions) to start
+          building your own agent skill.
         </p>
       </div>
 
@@ -110,22 +110,12 @@ async function handleSubmit() {
         <h2>Basic Information</h2>
         <div class="input-group">
           <label>Skill Name</label>
-          <input
-            v-model="form.name"
-            placeholder="e.g. react-hook-generator"
-            autofocus
-          />
-          <span class="hint"
-            >This will be used as the folder name (kebab-case
-            recommended).</span
-          >
+          <input v-model="form.name" placeholder="e.g. react-hook-generator" autofocus />
+          <span class="hint">This will be used as the folder name (kebab-case recommended).</span>
         </div>
         <div class="input-group">
           <label>Description</label>
-          <textarea
-            v-model="form.description"
-            placeholder="What does this skill do?"
-          ></textarea>
+          <textarea v-model="form.description" placeholder="What does this skill do?"></textarea>
         </div>
       </section>
 
@@ -146,19 +136,14 @@ async function handleSubmit() {
             </button>
           </div>
           <span class="hint"
-            >A new folder named "{{ form.name || 'skill-name' }}" will be
-            created here.</span
+            >A new folder named "{{ form.name || "skill-name" }}" will be created here.</span
           >
         </div>
       </section>
     </div>
 
     <footer class="footer">
-      <button
-        v-if="step > 1 && !isEditMode"
-        class="btn secondary"
-        @click="step--"
-      >
+      <button v-if="step > 1 && !isEditMode" class="btn secondary" @click="step--">
         <span>Back</span>
       </button>
       <div class="spacer"></div>
@@ -181,11 +166,11 @@ async function handleSubmit() {
         <span>{{
           creating
             ? isEditMode
-              ? 'Saving...'
-              : 'Creating...'
+              ? "Saving..."
+              : "Creating..."
             : isEditMode
-              ? 'Save Changes'
-              : 'Create Skill'
+              ? "Save Changes"
+              : "Create Skill"
         }}</span>
       </button>
     </footer>
@@ -316,7 +301,7 @@ textarea {
 
 .content-editor {
   flex: 1;
-  font-family: 'Fira Code', monospace;
+  font-family: "Fira Code", monospace;
   font-size: 14px;
   resize: none;
 }

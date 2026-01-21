@@ -1,52 +1,44 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
-import {
-  ShoppingBag,
-  Box,
-  Settings,
-  PlusCircle,
-  ChevronDown,
-} from 'lucide-vue-next'
-import { useProjectStore } from '@/stores/project'
-import { useSkillsStore } from '@/stores/skills'
-import { onMounted, ref } from 'vue'
-import { getVersion } from '@tauri-apps/api/app'
+import { useRoute } from "vue-router";
+import { ShoppingBag, Box, Settings, PlusCircle, ChevronDown } from "lucide-vue-next";
+import { useProjectStore } from "@/stores/project";
+import { useSkillsStore } from "@/stores/skills";
+import { onMounted, ref } from "vue";
+import { getVersion } from "@tauri-apps/api/app";
 
-const route = useRoute()
-const projectStore = useProjectStore()
-const skillsStore = useSkillsStore()
-const appVersion = ref('...')
+const route = useRoute();
+const projectStore = useProjectStore();
+const skillsStore = useSkillsStore();
+const appVersion = ref("...");
 
 onMounted(async () => {
-  projectStore.fetchProjects()
+  projectStore.fetchProjects();
   try {
-    appVersion.value = await getVersion()
+    appVersion.value = await getVersion();
   } catch (e) {
-    appVersion.value = '?.?.?'
+    appVersion.value = "?.?.?";
   }
-})
+});
 
 const handleProjectChange = (projectId: string) => {
-  if (projectId === 'global') {
-    projectStore.setCurrentProject(null)
-    skillsStore.fetchInstalledSkills('global')
+  if (projectId === "global") {
+    projectStore.setCurrentProject(null);
+    skillsStore.fetchInstalledSkills("global");
   } else {
-    const project = projectStore.projects.find(
-      (p) => p.id?.toString() === projectId,
-    )
+    const project = projectStore.projects.find((p) => p.id?.toString() === projectId);
     if (project) {
-      projectStore.setCurrentProject(project)
-      skillsStore.fetchInstalledSkills('project')
+      projectStore.setCurrentProject(project);
+      skillsStore.fetchInstalledSkills("project");
     }
   }
-}
+};
 
 const navItems = [
-  { name: 'Market', path: '/marketplace', icon: ShoppingBag },
-  { name: 'Installed', path: '/installed', icon: Box },
-  { name: 'Create', path: '/create', icon: PlusCircle },
-  { name: 'Settings', path: '/settings', icon: Settings },
-]
+  { name: "Market", path: "/marketplace", icon: ShoppingBag },
+  { name: "Installed", path: "/installed", icon: Box },
+  { name: "Create", path: "/create", icon: PlusCircle },
+  { name: "Settings", path: "/settings", icon: Settings },
+];
 </script>
 
 <template>
@@ -60,17 +52,11 @@ const navItems = [
       <div class="select-wrapper">
         <select
           :value="projectStore.currentProject?.id || 'global'"
-          @change="
-            (e) => handleProjectChange((e.target as HTMLSelectElement).value)
-          "
+          @change="(e) => handleProjectChange((e.target as HTMLSelectElement).value)"
         >
           <option value="global">🌐 Global Scope</option>
           <optgroup v-if="projectStore.projects.length" label="Projects">
-            <option
-              v-for="project in projectStore.projects"
-              :key="project.id"
-              :value="project.id"
-            >
+            <option v-for="project in projectStore.projects" :key="project.id" :value="project.id">
               📁 {{ project.name }}
             </option>
           </optgroup>
@@ -123,11 +109,7 @@ const navItems = [
 .logo .text {
   font-weight: 700;
   font-size: 18px;
-  background: linear-gradient(
-    135deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

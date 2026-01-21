@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { Search } from 'lucide-vue-next'
+import { Search } from "lucide-vue-next";
 
 defineProps<{
-  modelValue: string
-  placeholder?: string
-}>()
+  modelValue: string;
+  placeholder?: string;
+}>();
 
 defineEmits<{
-  (e: 'update:modelValue', value: string): void
-}>()
+  (e: "update:modelValue", value: string): void;
+}>();
 </script>
 
 <template>
@@ -17,9 +17,7 @@ defineEmits<{
     <input
       type="text"
       :value="modelValue"
-      @input="
-        $emit('update:modelValue', ($event.target as HTMLInputElement).value)
-      "
+      @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       :placeholder="placeholder || 'Search...'"
     />
   </div>

@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { X } from 'lucide-vue-next'
+import { X } from "lucide-vue-next";
 
 defineProps<{
-  show: boolean
-  title: string
-  maxWidth?: string
-}>()
+  show: boolean;
+  title: string;
+  maxWidth?: string;
+}>();
 
 const emit = defineEmits<{
-  (e: 'close'): void
-}>()
+  (e: "close"): void;
+}>();
 </script>
 
 <template>

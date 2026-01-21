@@ -1,55 +1,55 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { Save, X, Eye, Code } from 'lucide-vue-next'
-import { invoke } from '@tauri-apps/api/core'
+import { ref, onMounted, computed } from "vue";
+import { Save, X, Eye, Code } from "lucide-vue-next";
+import { invoke } from "@tauri-apps/api/core";
 
 const props = defineProps<{
-  skillPath: string
-  skillName: string
-}>()
+  skillPath: string;
+  skillName: string;
+}>();
 
 const emit = defineEmits<{
-  (e: 'close'): void
-  (e: 'save'): void
-}>()
+  (e: "close"): void;
+  (e: "save"): void;
+}>();
 
-const content = ref('')
-const originalContent = ref('')
-const loading = ref(true)
-const saving = ref(false)
-const viewMode = ref<'edit' | 'preview'>('edit')
+const content = ref("");
+const originalContent = ref("");
+const loading = ref(true);
+const saving = ref(false);
+const viewMode = ref<"edit" | "preview">("edit");
 
 onMounted(async () => {
   try {
-    content.value = await invoke('get_skill_content', {
+    content.value = await invoke("get_skill_content", {
       skillPath: props.skillPath,
-    })
-    originalContent.value = content.value
+    });
+    originalContent.value = content.value;
   } catch (e) {
-    alert(`Failed to load skill content: ${e}`)
+    alert(`Failed to load skill content: ${e}`);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-})
+});
 
 async function handleSave() {
-  saving.value = true
+  saving.value = true;
   try {
-    await invoke('save_skill_content', {
+    await invoke("save_skill_content", {
       skillPath: props.skillPath,
       content: content.value,
-    })
-    originalContent.value = content.value
-    emit('save')
-    alert('Skill saved successfully!')
+    });
+    originalContent.value = content.value;
+    emit("save");
+    alert("Skill saved successfully!");
   } catch (e) {
-    alert(`Failed to save: ${e}`)
+    alert(`Failed to save: ${e}`);
   } finally {
-    saving.value = false
+    saving.value = false;
   }
 }
 
-const hasChanges = computed(() => content.value !== originalContent.value)
+const hasChanges = computed(() => content.value !== originalContent.value);
 </script>
 
 <template>
@@ -79,13 +79,9 @@ const hasChanges = computed(() => content.value !== originalContent.value)
           </button>
         </div>
 
-        <button
-          class="save-btn"
-          :disabled="!hasChanges || saving"
-          @click="handleSave"
-        >
+        <button class="save-btn" :disabled="!hasChanges || saving" @click="handleSave">
           <Save :size="18" />
-          <span>{{ saving ? 'Saving...' : 'Save' }}</span>
+          <span>{{ saving ? "Saving..." : "Save" }}</span>
         </button>
 
         <button class="close-btn" @click="emit('close')">
@@ -228,7 +224,7 @@ textarea {
   border: none;
   outline: none;
   padding: 32px;
-  font-family: 'Fira Code', 'Courier New', Courier, monospace;
+  font-family: "Fira Code", "Courier New", Courier, monospace;
   font-size: 15px;
   line-height: 1.6;
   resize: none;

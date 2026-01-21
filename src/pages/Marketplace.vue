@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { onMounted, computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { useMarketplaceStore } from '@/stores/marketplace'
-import SkillCard from '@/components/skill/SkillCard.vue'
-import SearchInput from '@/components/common/SearchInput.vue'
-import Modal from '@/components/common/Modal.vue'
-import AgentIcon from '@/components/icons/AgentIcon.vue'
+import { onMounted, computed, ref, watch } from "vue";
+import { useRouter } from "vue-router";
+import { useMarketplaceStore } from "@/stores/marketplace";
+import SkillCard from "@/components/skill/SkillCard.vue";
+import SearchInput from "@/components/common/SearchInput.vue";
+import Modal from "@/components/common/Modal.vue";
+import AgentIcon from "@/components/icons/AgentIcon.vue";
 import {
   RefreshCw,
   Filter,
@@ -16,238 +16,246 @@ import {
   ArrowUpDown,
   Tag,
   X,
-} from 'lucide-vue-next'
-import { useAgentsStore } from '@/stores/agents'
-import { useSkillsStore } from '@/stores/skills'
-import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
-import type { Skill, SearchMode } from '@/types'
+} from "lucide-vue-next";
+import { useAgentsStore } from "@/stores/agents";
+import { useSkillsStore } from "@/stores/skills";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import type { Skill, SearchMode } from "@/types";
 
-const store = useMarketplaceStore()
-const agentsStore = useAgentsStore()
-const skillsStore = useSkillsStore()
-const router = useRouter()
+const store = useMarketplaceStore();
+const agentsStore = useAgentsStore();
+const skillsStore = useSkillsStore();
+const router = useRouter();
 
-const showInstallModal = ref(false)
-const selectedSkill = ref<Skill | null>(null)
-const selectedAgents = ref<string[]>([])
+const showInstallModal = ref(false);
+const selectedSkill = ref<Skill | null>(null);
+const selectedAgents = ref<string[]>([]);
 
-const installScope = ref<'project' | 'global'>('global')
-const installing = ref(false)
+const installScope = ref<"project" | "global">("global");
+const installing = ref(false);
 const installLogs = ref<
-  Array<{ time: string; message: string; type: 'info' | 'error' | 'success' }>
->([])
-const searchDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+  Array<{ time: string; message: string; type: "info" | "error" | "success" }>
+>([]);
+const searchDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 
 // Edit modal state
-const showEditModal = ref(false)
-const editingSkill = ref<Skill | null>(null)
-const editForm = ref({ name: '', description: '' })
+const showEditModal = ref(false);
+const editingSkill = ref<Skill | null>(null);
+const editForm = ref({ name: "", description: "" });
 
 onMounted(() => {
-  store.fetchSources()
-  store.fetchSkills()
-  store.fetchCachedSkills()
-  agentsStore.fetchAgents()
-  skillsStore.fetchInstalledSkills()
-})
+  store.fetchSources();
+  store.fetchSkills();
+  store.fetchCachedSkills();
+  agentsStore.fetchAgents();
+  skillsStore.fetchInstalledSkills();
+});
 
-const skills = computed(() => store.filteredSkills)
-const isSkillsmpSelected = computed(() => store.selectedSource === 'skillsmp')
-const showNoApiKeyWarning = computed(
-  () => isSkillsmpSelected.value && !store.hasApiKey,
-)
+const skills = computed(() => store.filteredSkills);
+const isSkillsmpSelected = computed(() => store.selectedSource === "skillsmp");
+const showNoApiKeyWarning = computed(() => isSkillsmpSelected.value && !store.hasApiKey);
 
 // Debounced search for API
 watch(
   () => store.searchQuery,
   (query) => {
-    if (!isSkillsmpSelected.value) return
+    if (!isSkillsmpSelected.value) return;
 
     if (searchDebounceTimer.value) {
-      clearTimeout(searchDebounceTimer.value)
+      clearTimeout(searchDebounceTimer.value);
     }
 
     searchDebounceTimer.value = setTimeout(() => {
-      store.searchSkillsmp(query)
-    }, 500)
+      store.searchSkillsmp(query);
+    }, 500);
   },
-)
+);
 
 async function handleRefresh() {
-  await store.fetchSkills(store.selectedSource || undefined, true)
+  await store.fetchSkills(store.selectedSource || undefined, true);
 }
 
 function toggleSearchMode() {
-  const newMode: SearchMode = store.searchMode === 'keyword' ? 'ai' : 'keyword'
-  store.setSearchMode(newMode)
+  const newMode: SearchMode = store.searchMode === "keyword" ? "ai" : "keyword";
+  store.setSearchMode(newMode);
   // Re-search if there's an existing query
   if (store.searchQuery && isSkillsmpSelected.value) {
-    store.searchSkillsmp(store.searchQuery)
+    store.searchSkillsmp(store.searchQuery);
   }
 }
 
 function openInstallModal(skill: Skill) {
-  installLogs.value = []
-  selectedSkill.value = skill
-  selectedAgents.value = agentsStore.agents
-    .filter((a) => a.installed)
-    .map((a) => a.agent_type)
-  showInstallModal.value = true
-  console.log(
-    'Opening install modal for skill:',
-    skill,
-    'Available agents:',
-    agentsStore.agents,
-  )
+  installLogs.value = [];
+  selectedSkill.value = skill;
+  selectedAgents.value = agentsStore.agents.filter((a) => a.installed).map((a) => a.agent_type);
+  showInstallModal.value = true;
+  console.log("Opening install modal for skill:", skill, "Available agents:", agentsStore.agents);
 }
 
 function getLogTime() {
-  return new Date().toLocaleTimeString('en-US', {
+  return new Date().toLocaleTimeString("en-US", {
     hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 async function handleInstall() {
-  if (!selectedSkill.value || selectedAgents.value.length === 0) return
+  if (!selectedSkill.value || selectedAgents.value.length === 0) return;
 
-  installing.value = true
-  installLogs.value = []
+  installing.value = true;
+  installLogs.value = [];
   installLogs.value.push({
     time: getLogTime(),
-    message: 'Initializing installation...',
-    type: 'info',
-  })
+    message: "Initializing installation...",
+    type: "info",
+  });
 
   // Set up event listener
-  let unlisten: (() => void) | undefined
+  let unlisten: (() => void) | undefined;
 
   try {
     unlisten = await listen<{
-      skill: string
-      status: string
-      message: string
-      agent?: string
-    }>('install-progress', (event) => {
-      console.log('Install progress:', event.payload)
+      skill: string;
+      status: string;
+      message: string;
+      agent?: string;
+    }>("install-progress", (event) => {
+      console.log("Install progress:", event.payload);
       const type =
-        event.payload.status === 'error'
-          ? 'error'
-          : event.payload.status === 'finished'
-            ? 'success'
-            : 'info'
+        event.payload.status === "error"
+          ? "error"
+          : event.payload.status === "finished"
+            ? "success"
+            : "info";
       installLogs.value.push({
         time: getLogTime(),
         message: event.payload.message,
         type,
-      })
+      });
 
       // Auto-scroll to bottom of terminal
-      const terminal = document.getElementById('install-terminal')
+      const terminal = document.getElementById("install-terminal");
       if (terminal) {
         setTimeout(() => {
-          terminal.scrollTop = terminal.scrollHeight
-        }, 10)
+          terminal.scrollTop = terminal.scrollHeight;
+        }, 10);
       }
-    })
+    });
+
+    // Filter out any agents that are not installed (detected) to prevent
+    // installing to disabled/greyed-out agents
+    const installedAgentTypes = agentsStore.agents
+      .filter((a) => a.installed)
+      .map((a) => a.agent_type);
+    const validAgents = selectedAgents.value.filter((agent) => installedAgentTypes.includes(agent));
+
+    if (validAgents.length === 0) {
+      installLogs.value.push({
+        time: getLogTime(),
+        message: "No valid agents selected for installation.",
+        type: "error",
+      });
+      installing.value = false;
+      return;
+    }
 
     console.log(
-      'Installing skill:',
+      "Installing skill:",
       selectedSkill.value,
-      'to agents:',
-      selectedAgents.value,
-      'scope:',
+      "to agents:",
+      validAgents,
+      "scope:",
       installScope.value,
-    )
+    );
 
     const results = await invoke<
       Array<{
-        success: boolean
-        path: string
-        agent: string
-        error?: string
+        success: boolean;
+        path: string;
+        agent: string;
+        error?: string;
       }>
-    >('install_skill', {
+    >("install_skill", {
       skill: selectedSkill.value,
-      agents: selectedAgents.value,
+      agents: validAgents,
       scope: installScope.value,
-    })
+    });
 
-    console.log('Install results:', results)
+    console.log("Install results:", results);
 
-    const successful = results.filter((r) => r.success)
-    const failed = results.filter((r) => !r.success)
+    const successful = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
 
     if (failed.length > 0) {
-      const errors = failed.map((f) => `${f.agent}: ${f.error}`).join('\n')
+      const errors = failed.map((f) => `${f.agent}: ${f.error}`).join("\n");
       installLogs.value.push({
         time: getLogTime(),
         message: `Some installations failed: ${errors}`,
-        type: 'error',
-      })
+        type: "error",
+      });
       if (successful.length === 0) {
-        throw new Error(`All installations failed:\n${errors}`)
+        throw new Error(`All installations failed:\n${errors}`);
       }
     }
 
     if (successful.length > 0) {
       installLogs.value.push({
         time: getLogTime(),
-        message: 'Installation completed successfully.',
-        type: 'success',
-      })
+        message: "Installation completed successfully.",
+        type: "success",
+      });
 
       // Short delay to let user see success before closing
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      showInstallModal.value = false
-      skillsStore.fetchInstalledSkills()
+      showInstallModal.value = false;
+      skillsStore.fetchInstalledSkills();
     }
   } catch (e) {
-    console.error('Installation failed:', e)
+    console.error("Installation failed:", e);
     installLogs.value.push({
       time: getLogTime(),
       message: `Installation failed: ${e}`,
-      type: 'error',
-    })
+      type: "error",
+    });
     // Don't alert here, let the logs show it
   } finally {
-    if (unlisten) unlisten()
-    installing.value = false
+    if (unlisten) unlisten();
+    installing.value = false;
   }
 }
 
 async function handleUninstall(skillName: string) {
-  if (!confirm(`Are you sure you want to uninstall ${skillName}?`)) return
+  if (!confirm(`Are you sure you want to uninstall ${skillName}?`)) return;
 
   try {
     // Uninstall from all agents that have it installed
-    const installedSkill = skillsStore.getSkillByName(skillName)
+    const installedSkill = skillsStore.getSkillByName(skillName);
     if (installedSkill) {
       for (const agent of installedSkill.agents) {
-        await skillsStore.uninstallSkill(skillName, agent)
+        await skillsStore.uninstallSkill(skillName, agent);
       }
     } else {
       // Fallback: try to uninstall from all agents with global scope
       for (const agent of agentsStore.agents.filter((a) => a.installed)) {
         try {
-          await invoke('uninstall_skill', {
+          await invoke("uninstall_skill", {
             skillName,
             agent: agent.agent_type,
-            scope: 'global',
-          })
+            scope: "global",
+          });
         } catch (e) {
           // Ignore errors for agents that don't have this skill
         }
       }
     }
-    skillsStore.fetchInstalledSkills()
-    alert('Skill uninstalled successfully!')
+    skillsStore.fetchInstalledSkills();
+    alert("Skill uninstalled successfully!");
   } catch (e) {
-    alert(`Failed to uninstall: ${e}`)
+    alert(`Failed to uninstall: ${e}`);
   }
 }
 
@@ -257,48 +265,48 @@ async function handleDeleteLocalSkill(skill: Skill) {
       `Are you sure you want to DELETE "${skill.name}"? This will permanently remove the skill files from disk.`,
     )
   )
-    return
+    return;
 
   try {
-    await invoke('delete_local_skill', { skillPath: skill.path })
-    alert('Skill deleted successfully!')
+    await invoke("delete_local_skill", { skillPath: skill.path });
+    alert("Skill deleted successfully!");
     // Refresh marketplace to remove deleted skill
-    await store.fetchSkills(undefined, true)
+    await store.fetchSkills(undefined, true);
   } catch (e) {
-    alert(`Failed to delete skill: ${e}`)
+    alert(`Failed to delete skill: ${e}`);
   }
 }
 
 async function handleEditLocalSkill(skill: Skill) {
-  console.log('handleEditLocalSkill called with:', skill)
+  console.log("handleEditLocalSkill called with:", skill);
   // Navigate to Create page in edit mode
   router.push({
-    path: '/create',
+    path: "/create",
     query: {
-      edit: 'true',
+      edit: "true",
       name: skill.name,
-      description: skill.description || '',
+      description: skill.description || "",
       path: skill.path,
     },
-  })
+  });
 }
 
 async function submitEditSkill() {
-  if (!editingSkill.value) return
+  if (!editingSkill.value) return;
 
   try {
-    await invoke('update_local_skill', {
+    await invoke("update_local_skill", {
       skillPath: editingSkill.value.path,
       name: editForm.value.name || undefined,
       description: editForm.value.description || undefined,
-    })
-    showEditModal.value = false
-    editingSkill.value = null
-    alert('Skill updated successfully!')
+    });
+    showEditModal.value = false;
+    editingSkill.value = null;
+    alert("Skill updated successfully!");
     // Refresh marketplace to show updated metadata
-    await store.fetchSkills(undefined, true)
+    await store.fetchSkills(undefined, true);
   } catch (e) {
-    alert(`Failed to update skill: ${e}`)
+    alert(`Failed to update skill: ${e}`);
   }
 }
 </script>
@@ -308,11 +316,7 @@ async function submitEditSkill() {
     <header class="header">
       <div class="title-row">
         <h1>Marketplace</h1>
-        <button
-          class="icon-btn"
-          @click="handleRefresh"
-          :disabled="store.loading"
-        >
+        <button class="icon-btn" @click="handleRefresh" :disabled="store.loading">
           <RefreshCw :size="20" :class="{ spinning: store.loading }" />
         </button>
       </div>
@@ -339,7 +343,7 @@ async function submitEditSkill() {
         >
           <Sparkles v-if="store.searchMode === 'ai'" :size="16" />
           <Search v-else :size="16" />
-          <span>{{ store.searchMode === 'ai' ? 'AI Search' : 'Keyword' }}</span>
+          <span>{{ store.searchMode === "ai" ? "AI Search" : "Keyword" }}</span>
         </button>
 
         <div class="control-group">
@@ -359,23 +363,16 @@ async function submitEditSkill() {
               :value="''"
               @change="
                 (e) => {
-                  const target = e.target as HTMLSelectElement
-                  if (
-                    target.value &&
-                    !store.selectedTags.includes(target.value)
-                  ) {
-                    store.selectedTags.push(target.value)
+                  const target = e.target as HTMLSelectElement;
+                  if (target.value && !store.selectedTags.includes(target.value)) {
+                    store.selectedTags.push(target.value);
                   }
-                  target.value = ''
+                  target.value = '';
                 }
               "
             >
               <option value="" disabled selected>Filter by Tag</option>
-              <option
-                v-for="tag in store.availableTags"
-                :key="tag"
-                :value="tag"
-              >
+              <option v-for="tag in store.availableTags" :key="tag" :value="tag">
                 {{ tag }}
               </option>
             </select>
@@ -386,11 +383,7 @@ async function submitEditSkill() {
             <Filter :size="16" />
             <select v-model="store.selectedSource">
               <option :value="null">All Sources</option>
-              <option
-                v-for="source in store.sources"
-                :key="source.id"
-                :value="source.id"
-              >
+              <option v-for="source in store.sources" :key="source.id" :value="source.id">
                 {{ source.name }}
               </option>
             </select>
@@ -404,25 +397,19 @@ async function submitEditSkill() {
           v-for="tag in store.selectedTags"
           :key="tag"
           class="tag-chip"
-          @click="
-            store.selectedTags = store.selectedTags.filter((t) => t !== tag)
-          "
+          @click="store.selectedTags = store.selectedTags.filter((t) => t !== tag)"
         >
           <span>{{ tag }}</span>
           <X :size="12" />
         </div>
-        <button class="clear-tags" @click="store.selectedTags = []">
-          Clear filters
-        </button>
+        <button class="clear-tags" @click="store.selectedTags = []">Clear filters</button>
       </div>
 
       <!-- API Key Warning -->
       <div v-if="showNoApiKeyWarning" class="api-warning">
         <AlertCircle :size="16" />
         <span>No API key configured.</span>
-        <router-link to="/settings"
-          >Add your SkillsMP API key in Settings</router-link
-        >
+        <router-link to="/settings">Add your SkillsMP API key in Settings</router-link>
       </div>
     </header>
 
@@ -435,9 +422,7 @@ async function submitEditSkill() {
         <template v-else-if="store.fetchProgress.status === 'fetching'">
           Fetching {{ store.fetchProgress.currentSource }}...
           <span class="progress-count"
-            >({{ store.fetchProgress.current }}/{{
-              store.fetchProgress.total
-            }})</span
+            >({{ store.fetchProgress.current }}/{{ store.fetchProgress.total }})</span
           >
         </template>
         <template v-else> Fetching skills from marketplace... </template>
@@ -446,9 +431,7 @@ async function submitEditSkill() {
         <div
           class="progress-fill"
           :style="{
-            width: `${
-              (store.fetchProgress.current / store.fetchProgress.total) * 100
-            }%`,
+            width: `${(store.fetchProgress.current / store.fetchProgress.total) * 100}%`,
           }"
         ></div>
       </div>
@@ -487,9 +470,7 @@ async function submitEditSkill() {
     >
       <div class="modal-content-grid">
         <div class="install-form">
-          <p class="form-help">
-            Select the agents you want to install this skill to.
-          </p>
+          <p class="form-help">Select the agents you want to install this skill to.</p>
 
           <div class="agent-selection">
             <div
@@ -503,9 +484,7 @@ async function submitEditSkill() {
               @click="
                 agent.installed &&
                 (selectedAgents.includes(agent.agent_type)
-                  ? (selectedAgents = selectedAgents.filter(
-                      (a) => a !== agent.agent_type,
-                    ))
+                  ? (selectedAgents = selectedAgents.filter((a) => a !== agent.agent_type))
                   : selectedAgents.push(agent.agent_type))
               "
             >
@@ -515,10 +494,7 @@ async function submitEditSkill() {
                 class="agent-icon"
               />
               <div class="agent-name">{{ agent.display_name }}</div>
-              <div
-                class="check-wrap"
-                v-if="selectedAgents.includes(agent.agent_type)"
-              >
+              <div class="check-wrap" v-if="selectedAgents.includes(agent.agent_type)">
                 <CheckCircle2 :size="16" />
               </div>
             </div>
@@ -578,7 +554,7 @@ async function submitEditSkill() {
           :disabled="selectedAgents.length === 0 || installing"
           @click="handleInstall"
         >
-          {{ installing ? 'Installing...' : 'Install Skill' }}
+          {{ installing ? "Installing..." : "Install Skill" }}
         </button>
       </template>
     </Modal>
@@ -605,12 +581,8 @@ async function submitEditSkill() {
       </div>
 
       <template #footer>
-        <button class="footer-btn secondary" @click="showEditModal = false">
-          Cancel
-        </button>
-        <button class="footer-btn primary" @click="submitEditSkill">
-          Save Changes
-        </button>
+        <button class="footer-btn secondary" @click="showEditModal = false">Cancel</button>
+        <button class="footer-btn primary" @click="submitEditSkill">Save Changes</button>
       </template>
     </Modal>
   </div>
@@ -661,11 +633,7 @@ h1 {
 }
 
 .search-mode-btn.active {
-  background: linear-gradient(
-    135deg,
-    rgba(139, 92, 246, 0.1),
-    rgba(168, 85, 247, 0.15)
-  );
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(168, 85, 247, 0.15));
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
@@ -702,7 +670,8 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: -16px; /* Pull closer to header */
+  margin-top: -16px;
+  /* Pull closer to header */
   margin-bottom: 8px;
 }
 
@@ -809,6 +778,7 @@ select {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -843,11 +813,7 @@ select {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
   border-radius: 3px;
   transition: width 0.3s ease;
 }
@@ -892,7 +858,7 @@ select {
 }
 
 .terminal-header::before {
-  content: '';
+  content: "";
   display: block;
   width: 8px;
   height: 8px;
@@ -904,8 +870,7 @@ select {
   flex: 1;
   padding: 12px;
   overflow-y: auto;
-  font-family:
-    'JetBrains Mono', 'Fira Code', 'SF Mono', 'Roboto Mono', 'Menlo', monospace;
+  font-family: "JetBrains Mono", "Fira Code", "SF Mono", "Roboto Mono", "Menlo", monospace;
   font-size: 12px;
   line-height: 1.6;
   color: #d4d4d4;

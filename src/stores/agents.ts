@@ -1,8 +1,8 @@
-import { defineStore } from 'pinia'
-import { invoke } from '@tauri-apps/api/core'
-import type { AgentConfig } from '@/types'
+import { defineStore } from "pinia";
+import { invoke } from "@tauri-apps/api/core";
+import type { AgentConfig } from "@/types";
 
-export const useAgentsStore = defineStore('agents', {
+export const useAgentsStore = defineStore("agents", {
   state: () => ({
     agents: [] as AgentConfig[],
     loading: false,
@@ -11,26 +11,24 @@ export const useAgentsStore = defineStore('agents', {
 
   actions: {
     async fetchAgents() {
-      this.loading = true
+      this.loading = true;
       try {
-        this.agents = await invoke('detect_agents')
+        this.agents = await invoke("detect_agents");
       } catch (e) {
-        this.error = String(e)
+        this.error = String(e);
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
   },
 
   getters: {
     getIcon: (state) => (agentType: string) => {
-      const agent = state.agents.find(
-        (a) => a.agent_type === agentType || a.name === agentType,
-      )
+      const agent = state.agents.find((a) => a.agent_type === agentType || a.name === agentType);
       if (agent && agent.is_custom) {
-        return agent.icon
+        return agent.icon;
       }
-      return agentType // For known agents, the type itself is the icon key (e.g. 'vscode')
+      return agentType; // For known agents, the type itself is the icon key (e.g. 'vscode')
     },
   },
-})
+});

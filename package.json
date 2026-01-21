@@ -1,7 +1,7 @@
 {
   "name": "skill-manager",
-  "private": true,
   "version": "0.2.1",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,12 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:info": "tauri info",
-    "release": "bash scripts/release.sh"
+    "release": "bash scripts/release.sh",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt .",
+    "format:check": "oxfmt . --check",
+    "prepare": "husky"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",
@@ -39,9 +44,22 @@
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/test-utils": "^2.4.6",
     "happy-dom": "^20.3.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "oxfmt": "^0.26.0",
+    "oxlint": "^1.41.0",
     "typescript": "~5.6.2",
     "vite": "^6.0.3",
     "vitest": "^4.0.17",
     "vue-tsc": "^2.1.10"
+  },
+  "lint-staged": {
+    "*.{js,ts,vue,tsx,jsx}": [
+      "oxlint --fix",
+      "oxfmt"
+    ],
+    "*.{json,css,md,yml,yaml}": [
+      "oxfmt"
+    ]
   }
 }

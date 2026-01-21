@@ -1,195 +1,212 @@
 <script setup lang="ts">
-import { onMounted, computed, ref } from 'vue'
-import type { InstalledSkill } from '@/types'
-import SkillList from '@/components/skill/SkillList.vue'
-import SkillEditor from '@/components/skill/SkillEditor.vue'
-import Modal from '@/components/common/Modal.vue'
-import AgentIcon from '@/components/icons/AgentIcon.vue'
-import { RefreshCw, Package, Plus, CheckCircle2 } from 'lucide-vue-next'
-import { useSkillsStore } from '@/stores/skills'
-import { useAgentsStore } from '@/stores/agents'
-import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { onMounted, computed, ref } from "vue";
+import type { InstalledSkill } from "@/types";
+import SkillList from "@/components/skill/SkillList.vue";
+import SkillEditor from "@/components/skill/SkillEditor.vue";
+import Modal from "@/components/common/Modal.vue";
+import AgentIcon from "@/components/icons/AgentIcon.vue";
+import { RefreshCw, Package, Plus, CheckCircle2 } from "lucide-vue-next";
+import { useSkillsStore } from "@/stores/skills";
+import { useAgentsStore } from "@/stores/agents";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
-const skillsStore = useSkillsStore()
-const agentsStore = useAgentsStore()
+const skillsStore = useSkillsStore();
+const agentsStore = useAgentsStore();
 
 // Install Modal State
-const showInstallModal = ref(false)
-const selectedSkill = ref<InstalledSkill | null>(null)
-const selectedAgents = ref<string[]>([])
-const installScope = ref<'project' | 'global'>('global')
-const installing = ref(false)
+const showInstallModal = ref(false);
+const selectedSkill = ref<InstalledSkill | null>(null);
+const selectedAgents = ref<string[]>([]);
+const installScope = ref<"project" | "global">("global");
+const installing = ref(false);
 const installLogs = ref<
-  Array<{ time: string; message: string; type: 'info' | 'error' | 'success' }>
->([])
+  Array<{ time: string; message: string; type: "info" | "error" | "success" }>
+>([]);
 
 const scope = computed({
   get: () => skillsStore.scope,
   set: (val) => skillsStore.fetchInstalledSkills(val),
-})
+});
 
-const skills = computed(() => skillsStore.installedSkills)
-const loading = computed(() => skillsStore.loading)
+const skills = computed(() => skillsStore.installedSkills);
+const loading = computed(() => skillsStore.loading);
 
-const editingSkill = ref<InstalledSkill | null>(null)
+const editingSkill = ref<InstalledSkill | null>(null);
 
 onMounted(() => {
-  skillsStore.fetchInstalledSkills()
-  agentsStore.fetchAgents() // Ensure agents are loaded
-})
+  skillsStore.fetchInstalledSkills();
+  agentsStore.fetchAgents(); // Ensure agents are loaded
+});
 
 function handleRefresh() {
-  skillsStore.fetchInstalledSkills()
+  skillsStore.fetchInstalledSkills();
 }
 
 function handleEdit(skill: InstalledSkill) {
-  editingSkill.value = skill
+  editingSkill.value = skill;
 }
 
 function closeEditor() {
-  editingSkill.value = null
-  handleRefresh()
+  editingSkill.value = null;
+  handleRefresh();
 }
 
 // Open modal for supplemental install
 function openInstallModal(skill: InstalledSkill) {
-  installLogs.value = []
-  selectedSkill.value = skill
+  installLogs.value = [];
+  selectedSkill.value = skill;
   // Default to agents that are installed but DON'T have this skill yet
-  const installedFor = skill.agents || []
+  const installedFor = skill.agents || [];
   selectedAgents.value = agentsStore.agents
     .filter((a) => a.installed && !installedFor.includes(a.agent_type))
-    .map((a) => a.agent_type)
+    .map((a) => a.agent_type);
 
   // If all possible agents already have it (shouldn't happen due to button logic),
   // maybe select none or all? Let's select none to force user choice.
   if (selectedAgents.value.length === 0) {
-    selectedAgents.value = []
+    selectedAgents.value = [];
   }
 
-  showInstallModal.value = true
+  showInstallModal.value = true;
 }
 
 function getLogTime() {
-  return new Date().toLocaleTimeString('en-US', {
+  return new Date().toLocaleTimeString("en-US", {
     hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 async function handleInstall() {
-  if (!selectedSkill.value || selectedAgents.value.length === 0) return
+  if (!selectedSkill.value || selectedAgents.value.length === 0) return;
 
-  installing.value = true
-  installLogs.value = []
+  installing.value = true;
+  installLogs.value = [];
   installLogs.value.push({
     time: getLogTime(),
-    message: 'Initializing installation...',
-    type: 'info',
-  })
+    message: "Initializing installation...",
+    type: "info",
+  });
 
-  let unlisten: (() => void) | undefined
+  let unlisten: (() => void) | undefined;
 
   try {
     unlisten = await listen<{
-      skill: string
-      status: string
-      message: string
-      agent?: string
-    }>('install-progress', (event) => {
+      skill: string;
+      status: string;
+      message: string;
+      agent?: string;
+    }>("install-progress", (event) => {
       const type =
-        event.payload.status === 'error'
-          ? 'error'
-          : event.payload.status === 'finished'
-            ? 'success'
-            : 'info'
+        event.payload.status === "error"
+          ? "error"
+          : event.payload.status === "finished"
+            ? "success"
+            : "info";
       installLogs.value.push({
         time: getLogTime(),
         message: event.payload.message,
         type,
-      })
+      });
 
-      const terminal = document.getElementById('install-terminal')
+      const terminal = document.getElementById("install-terminal");
       if (terminal) {
         setTimeout(() => {
-          terminal.scrollTop = terminal.scrollHeight
-        }, 10)
+          terminal.scrollTop = terminal.scrollHeight;
+        }, 10);
       }
-    })
+    });
 
     // We need to pass the inner `Skill` object from InstalledSkill
     // InstalledSkill extends Skill, so we can pass it directly.
-    const skillToInstall = selectedSkill.value
+    const skillToInstall = selectedSkill.value;
+
+    // Filter out any agents that are not installed (detected) to prevent
+    // installing to disabled/greyed-out agents
+    const installedAgentTypes = agentsStore.agents
+      .filter((a) => a.installed)
+      .map((a) => a.agent_type);
+    const validAgents = selectedAgents.value.filter((agent) => installedAgentTypes.includes(agent));
+
+    if (validAgents.length === 0) {
+      installLogs.value.push({
+        time: getLogTime(),
+        message: "No valid agents selected for installation.",
+        type: "error",
+      });
+      installing.value = false;
+      return;
+    }
 
     const results = await invoke<
       Array<{
-        success: boolean
-        path: string
-        agent: string
-        error?: string
+        success: boolean;
+        path: string;
+        agent: string;
+        error?: string;
       }>
-    >('install_skill', {
+    >("install_skill", {
       skill: skillToInstall,
-      agents: selectedAgents.value,
+      agents: validAgents,
       scope: installScope.value,
-    })
+    });
 
-    const successful = results.filter((r) => r.success)
-    const failed = results.filter((r) => !r.success)
+    const successful = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
 
     if (failed.length > 0) {
-      const errors = failed.map((f) => `${f.agent}: ${f.error}`).join('\n')
+      const errors = failed.map((f) => `${f.agent}: ${f.error}`).join("\n");
       installLogs.value.push({
         time: getLogTime(),
         message: `Some installations failed: ${errors}`,
-        type: 'error',
-      })
+        type: "error",
+      });
       if (successful.length === 0) {
-        throw new Error(`All installations failed:\n${errors}`)
+        throw new Error(`All installations failed:\n${errors}`);
       }
     }
 
     if (successful.length > 0) {
       installLogs.value.push({
         time: getLogTime(),
-        message: 'Installation completed successfully.',
-        type: 'success',
-      })
+        message: "Installation completed successfully.",
+        type: "success",
+      });
 
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      showInstallModal.value = false
-      skillsStore.fetchInstalledSkills()
+      showInstallModal.value = false;
+      skillsStore.fetchInstalledSkills();
     }
   } catch (e) {
     installLogs.value.push({
       time: getLogTime(),
       message: `Installation failed: ${e}`,
-      type: 'error',
-    })
+      type: "error",
+    });
   } finally {
-    if (unlisten) unlisten()
-    installing.value = false
+    if (unlisten) unlisten();
+    installing.value = false;
   }
 }
 
 async function handleUninstall(skill: InstalledSkill) {
-  if (!confirm(`Are you sure you want to uninstall ${skill.name}?`)) return
+  if (!confirm(`Are you sure you want to uninstall ${skill.name}?`)) return;
 
   try {
     for (const agent of skill.agents) {
-      await skillsStore.uninstallSkill(skill.name, agent)
+      await skillsStore.uninstallSkill(skill.name, agent);
     }
   } catch (e) {
-    alert(`Failed to uninstall: ${e}`)
+    alert(`Failed to uninstall: ${e}`);
   }
 }
 
-function handleScopeChange(newScope: 'project' | 'global') {
-  skillsStore.fetchInstalledSkills(newScope)
+function handleScopeChange(newScope: "project" | "global") {
+  skillsStore.fetchInstalledSkills(newScope);
 }
 </script>
 
@@ -262,9 +279,7 @@ function handleScopeChange(newScope: 'project' | 'global') {
     >
       <div class="modal-content-grid">
         <div class="install-form">
-          <p class="form-help">
-            Select the agents you want to install this skill to.
-          </p>
+          <p class="form-help">Select the agents you want to install this skill to.</p>
 
           <div class="agent-selection">
             <div
@@ -278,9 +293,7 @@ function handleScopeChange(newScope: 'project' | 'global') {
               @click="
                 agent.installed &&
                 (selectedAgents.includes(agent.agent_type)
-                  ? (selectedAgents = selectedAgents.filter(
-                      (a) => a !== agent.agent_type,
-                    ))
+                  ? (selectedAgents = selectedAgents.filter((a) => a !== agent.agent_type))
                   : selectedAgents.push(agent.agent_type))
               "
             >
@@ -290,10 +303,7 @@ function handleScopeChange(newScope: 'project' | 'global') {
                 class="agent-icon"
               />
               <div class="agent-name">{{ agent.display_name }}</div>
-              <div
-                class="check-wrap"
-                v-if="selectedAgents.includes(agent.agent_type)"
-              >
+              <div class="check-wrap" v-if="selectedAgents.includes(agent.agent_type)">
                 <CheckCircle2 :size="16" />
               </div>
             </div>
@@ -353,7 +363,7 @@ function handleScopeChange(newScope: 'project' | 'global') {
           :disabled="selectedAgents.length === 0 || installing"
           @click="handleInstall"
         >
-          {{ installing ? 'Installing...' : 'Install Skill' }}
+          {{ installing ? "Installing..." : "Install Skill" }}
         </button>
       </template>
     </Modal>
@@ -439,6 +449,7 @@ h1 {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -511,7 +522,7 @@ h1 {
 }
 
 .terminal-header::before {
-  content: '';
+  content: "";
   display: block;
   width: 8px;
   height: 8px;
@@ -523,8 +534,7 @@ h1 {
   flex: 1;
   padding: 12px;
   overflow-y: auto;
-  font-family:
-    'JetBrains Mono', 'Fira Code', 'SF Mono', 'Roboto Mono', 'Menlo', monospace;
+  font-family: "JetBrains Mono", "Fira Code", "SF Mono", "Roboto Mono", "Menlo", monospace;
   font-size: 12px;
   line-height: 1.6;
   color: #d4d4d4;

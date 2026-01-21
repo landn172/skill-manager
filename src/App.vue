@@ -1,25 +1,25 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import MainLayout from '@/components/layout/MainLayout.vue'
-import { useThemeStore } from '@/stores/theme'
-import OnboardingModal from '@/components/onboarding/OnboardingModal.vue'
-import UpdateNotification from '@/components/common/UpdateNotification.vue'
+import { ref, onMounted } from "vue";
+import MainLayout from "@/components/layout/MainLayout.vue";
+import { useThemeStore } from "@/stores/theme";
+import OnboardingModal from "@/components/onboarding/OnboardingModal.vue";
+import UpdateNotification from "@/components/common/UpdateNotification.vue";
 
 // Initialize theme
-useThemeStore()
+useThemeStore();
 
-const showOnboarding = ref(false)
+const showOnboarding = ref(false);
 
 onMounted(() => {
-  const completed = localStorage.getItem('onboarding_completed')
+  const completed = localStorage.getItem("onboarding_completed");
   if (!completed) {
-    showOnboarding.value = true
+    showOnboarding.value = true;
   }
-})
+});
 
 function closeOnboarding() {
-  localStorage.setItem('onboarding_completed', 'true')
-  showOnboarding.value = false
+  localStorage.setItem("onboarding_completed", "true");
+  showOnboarding.value = false;
 }
 </script>
 
@@ -32,5 +32,5 @@ function closeOnboarding() {
 </template>
 
 <style>
-@import '@/assets/styles/main.css';
+@import "@/assets/styles/main.css";
 </style>

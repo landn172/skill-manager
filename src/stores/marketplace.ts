@@ -1,52 +1,51 @@
-import { defineStore } from 'pinia'
-import { invoke } from '@tauri-apps/api/core'
-import type { MarketplaceSource, MarketplaceSkill, SearchMode } from '@/types'
+import { defineStore } from "pinia";
+import { invoke } from "@tauri-apps/api/core";
+import type { MarketplaceSource, MarketplaceSkill, SearchMode } from "@/types";
 
-export const useMarketplaceStore = defineStore('marketplace', {
+export const useMarketplaceStore = defineStore("marketplace", {
   state: () => ({
     sources: [] as MarketplaceSource[],
     skills: [] as MarketplaceSkill[],
     loading: false,
     error: null as string | null,
-    searchQuery: '',
+    searchQuery: "",
     selectedSource: null as string | null,
-    searchMode: 'keyword' as SearchMode,
+    searchMode: "keyword" as SearchMode,
     hasApiKey: false,
-    sortBy: 'stars' as 'name' | 'stars' | 'updated',
+    sortBy: "stars" as "name" | "stars" | "updated",
     selectedTags: [] as string[],
     fetchProgress: {
       current: 0,
       total: 0,
-      currentSource: '',
-      status: '' as 'idle' | 'loading_sources' | 'fetching' | 'done',
+      currentSource: "",
+      status: "" as "idle" | "loading_sources" | "fetching" | "done",
     },
-    cachedSkills: [] as import('@/types').CacheMetadata[],
+    cachedSkills: [] as import("@/types").CacheMetadata[],
   }),
 
   getters: {
     isSkillCached: (state) => (skillName: string) => {
-      return state.cachedSkills.some((s) => s.skill_name === skillName)
+      return state.cachedSkills.some((s) => s.skill_name === skillName);
     },
     getCachedAt: (state) => (skillName: string) => {
-      return state.cachedSkills.find((s) => s.skill_name === skillName)
-        ?.downloaded_at
+      return state.cachedSkills.find((s) => s.skill_name === skillName)?.downloaded_at;
     },
     availableTags(state): string[] {
-      const tagSet = new Set<string>()
+      const tagSet = new Set<string>();
       state.skills.forEach((skill) => {
         if (skill.tags) {
-          skill.tags.forEach((tag) => tagSet.add(tag))
+          skill.tags.forEach((tag) => tagSet.add(tag));
         }
-      })
-      return Array.from(tagSet).sort()
+      });
+      return Array.from(tagSet).sort();
     },
 
     filteredSkills(state) {
-      let result = state.skills
+      let result = state.skills;
 
       // 1. Filter by Source
       if (state.selectedSource) {
-        result = result.filter((s) => s.source_id === state.selectedSource)
+        result = result.filter((s) => s.source_id === state.selectedSource);
       } else {
         // Deduplication priority...
         // ... (existing logic for deduplication) ...
@@ -61,207 +60,193 @@ export const useMarketplaceStore = defineStore('marketplace', {
           registry: 80,
           git: 70,
           api: 60,
-        }
+        };
 
-        const uniqueSkills = new Map<string, MarketplaceSkill>()
+        const uniqueSkills = new Map<string, MarketplaceSkill>();
 
         for (const skill of result) {
-          const source = state.sources.find((s) => s.id === skill.source_id)
-          if (!source) continue
+          const source = state.sources.find((s) => s.id === skill.source_id);
+          if (!source) continue;
 
-          const existing = uniqueSkills.get(skill.name)
-          let skillPriority = priorityMap[source.source_type] || 0
-          if (source.official) skillPriority = 100
+          const existing = uniqueSkills.get(skill.name);
+          let skillPriority = priorityMap[source.source_type] || 0;
+          if (source.official) skillPriority = 100;
 
           if (!existing) {
-            uniqueSkills.set(skill.name, skill)
+            uniqueSkills.set(skill.name, skill);
           } else {
-            const existingSource = state.sources.find(
-              (s) => s.id === existing.source_id,
-            )
-            let existingPriority = 0
+            const existingSource = state.sources.find((s) => s.id === existing.source_id);
+            let existingPriority = 0;
             if (existingSource) {
-              existingPriority = priorityMap[existingSource.source_type] || 0
-              if (existingSource.official) existingPriority = 100
+              existingPriority = priorityMap[existingSource.source_type] || 0;
+              if (existingSource.official) existingPriority = 100;
             }
 
             if (skillPriority > existingPriority) {
-              uniqueSkills.set(skill.name, skill)
+              uniqueSkills.set(skill.name, skill);
             }
           }
         }
-        result = Array.from(uniqueSkills.values())
+        result = Array.from(uniqueSkills.values());
       }
 
       // 2. Filter by Tags
       if (state.selectedTags.length > 0) {
         result = result.filter(
-          (s) =>
-            s.tags && state.selectedTags.every((tag) => s.tags.includes(tag)),
-        )
+          (s) => s.tags && state.selectedTags.every((tag) => s.tags.includes(tag)),
+        );
       }
 
       // 3. Filter by Search Query (Keyword mode)
-      if (state.searchQuery && state.selectedSource !== 'skillsmp') {
-        const query = state.searchQuery.toLowerCase()
+      if (state.searchQuery && state.selectedSource !== "skillsmp") {
+        const query = state.searchQuery.toLowerCase();
         result = result.filter(
           (s) =>
-            s.name.toLowerCase().includes(query) ||
-            s.description.toLowerCase().includes(query),
-        )
+            s.name.toLowerCase().includes(query) || s.description.toLowerCase().includes(query),
+        );
       }
 
       // 4. Sort
       result.sort((a, b) => {
-        if (state.sortBy === 'stars') {
-          return (b.stars || 0) - (a.stars || 0)
-        } else if (state.sortBy === 'updated') {
+        if (state.sortBy === "stars") {
+          return (b.stars || 0) - (a.stars || 0);
+        } else if (state.sortBy === "updated") {
           // Assuming metadata has updated_at, otherwise fallback to 0
           // The current Skill type definition isn't fully visible, but usually there's no updated_at in standard list.
           // If not available, stable sort or name.
           // Let's stick to Name and Stars for now as confirmed features.
           // If 'updated' is requested but data missing, fallback to name.
-          return 0
+          return 0;
         } else {
-          return a.name.localeCompare(b.name)
+          return a.name.localeCompare(b.name);
         }
-      })
+      });
 
-      return result
+      return result;
     },
 
     skillsmpSource(state) {
-      return state.sources.find((s) => s.id === 'skillsmp')
+      return state.sources.find((s) => s.id === "skillsmp");
     },
   },
 
   actions: {
     async fetchSources() {
       try {
-        this.sources = await invoke('get_marketplace_sources')
-        await this.checkApiKey()
+        this.sources = await invoke("get_marketplace_sources");
+        await this.checkApiKey();
       } catch (e) {
-        console.error('Failed to fetch marketplace sources', e)
+        console.error("Failed to fetch marketplace sources", e);
       }
     },
 
     async checkApiKey() {
       try {
-        const key = await invoke<string | null>('get_skillsmp_api_key_masked')
-        this.hasApiKey = !!key
+        const key = await invoke<string | null>("get_skillsmp_api_key_masked");
+        this.hasApiKey = !!key;
       } catch (e) {
-        this.hasApiKey = false
+        this.hasApiKey = false;
       }
     },
 
     async fetchSkills(sourceId?: string, forceRefresh = false) {
-      this.loading = true
-      this.error = null
+      this.loading = true;
+      this.error = null;
       this.fetchProgress = {
         current: 0,
         total: 0,
-        currentSource: '',
-        status: 'loading_sources',
-      }
+        currentSource: "",
+        status: "loading_sources",
+      };
 
       // Ensure sources are loaded first
       if (this.sources.length === 0) {
-        await this.fetchSources()
+        await this.fetchSources();
       }
 
       // Clear if fetching all
       if (!sourceId) {
-        this.skills = []
+        this.skills = [];
       }
 
       try {
         const sourcesToFetch = sourceId
           ? this.sources.filter((s) => s.id === sourceId)
-          : this.sources.filter((s) => s.enabled)
+          : this.sources.filter((s) => s.enabled);
 
-        this.fetchProgress.total = sourcesToFetch.length
-        this.fetchProgress.status = 'fetching'
+        this.fetchProgress.total = sourcesToFetch.length;
+        this.fetchProgress.status = "fetching";
 
         // Fetch sources one by one to show progress
         for (let i = 0; i < sourcesToFetch.length; i++) {
-          const source = sourcesToFetch[i]
-          this.fetchProgress.current = i + 1
-          this.fetchProgress.currentSource = source.name
+          const source = sourcesToFetch[i];
+          this.fetchProgress.current = i + 1;
+          this.fetchProgress.currentSource = source.name;
 
           try {
-            let newSkills: MarketplaceSkill[] = []
+            let newSkills: MarketplaceSkill[] = [];
 
-            if (source.id === 'skillsmp') {
+            if (source.id === "skillsmp") {
               // Use Proxy for SkillsMP to bypass Cloudflare
-              newSkills = await this.fetchSkillsmpDirect('*')
+              newSkills = await this.fetchSkillsmpDirect("*");
             } else {
               // Use standard backend fetch for others
-              newSkills = await invoke<MarketplaceSkill[]>(
-                'fetch_marketplace_skills',
-                {
-                  sourceId: source.id,
-                  forceRefresh,
-                },
-              )
+              newSkills = await invoke<MarketplaceSkill[]>("fetch_marketplace_skills", {
+                sourceId: source.id,
+                forceRefresh,
+              });
             }
 
             // Merge results, avoiding duplicates
-            const existingIds = new Set(
-              this.skills.map((s) => s.name + s.source_id),
-            )
-            const uniqueSkills = newSkills.filter(
-              (s) => !existingIds.has(s.name + s.source_id),
-            )
-            this.skills.push(...uniqueSkills)
+            const existingIds = new Set(this.skills.map((s) => s.name + s.source_id));
+            const uniqueSkills = newSkills.filter((s) => !existingIds.has(s.name + s.source_id));
+            this.skills.push(...uniqueSkills);
           } catch (e) {
-            console.error(`Failed to fetch from ${source.name}:`, e)
+            console.error(`Failed to fetch from ${source.name}:`, e);
             // Store error for SkillsMP specifically
-            if (source.id === 'skillsmp') {
-              this.error = String(e)
+            if (source.id === "skillsmp") {
+              this.error = String(e);
             }
           }
         }
 
-        this.fetchProgress.status = 'done'
+        this.fetchProgress.status = "done";
       } catch (e) {
-        this.error = String(e)
+        this.error = String(e);
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
 
     async searchSkillsmp(query: string) {
       if (!query.trim()) {
-        return this.fetchSkills('skillsmp')
+        return this.fetchSkills("skillsmp");
       }
 
-      this.loading = true
-      this.error = null
+      this.loading = true;
+      this.error = null;
 
       try {
-        if (this.searchMode === 'ai') {
+        if (this.searchMode === "ai") {
           // AI semantic search
-          const results = await invoke<MarketplaceSkill[]>(
-            'search_skillsmp_ai',
-            {
-              query,
-            },
-          )
+          const results = await invoke<MarketplaceSkill[]>("search_skillsmp_ai", {
+            query,
+          });
           // Replace skills with search results
-          this.skills = this.skills.filter((s) => s.source_id !== 'skillsmp')
-          this.skills.push(...results)
+          this.skills = this.skills.filter((s) => s.source_id !== "skillsmp");
+          this.skills.push(...results);
         } else {
           // Keyword search using WebView Proxy to bypass Cloudflare
-          const results = await this.fetchSkillsmpDirect(query)
+          const results = await this.fetchSkillsmpDirect(query);
 
           // Replace skills with search results
-          this.skills = this.skills.filter((s) => s.source_id !== 'skillsmp')
-          this.skills.push(...results)
+          this.skills = this.skills.filter((s) => s.source_id !== "skillsmp");
+          this.skills.push(...results);
         }
       } catch (e) {
-        this.error = String(e)
+        this.error = String(e);
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
 
@@ -273,161 +258,149 @@ export const useMarketplaceStore = defineStore('marketplace', {
      * - Tauri HTTP plugin makes native requests, bypassing CORS entirely
      * - This also works around Cloudflare's browser detection
      */
-    async fetchSkillsmpDirect(
-      query: string,
-      page = 1,
-      limit = 50,
-    ): Promise<MarketplaceSkill[]> {
-      const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
+    async fetchSkillsmpDirect(query: string, page = 1, limit = 50): Promise<MarketplaceSkill[]> {
+      const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
 
       // Get API Key from Rust store
-      const apiKey = await invoke<string | null>('get_skillsmp_api_key')
+      const apiKey = await invoke<string | null>("get_skillsmp_api_key");
       if (!apiKey) {
         throw new Error(
-          'SkillsMP API key not configured. Add SKILLSMP_API_KEY to .env or configure in Settings.',
-        )
+          "SkillsMP API key not configured. Add SKILLSMP_API_KEY to .env or configure in Settings.",
+        );
       }
 
-      const url = `https://skillsmp.com/api/v1/skills/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}&sortBy=stars`
+      const url = `https://skillsmp.com/api/v1/skills/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}&sortBy=stars`;
 
-      console.log('[SkillsMP] Fetching via Tauri HTTP:', url)
+      console.log("[SkillsMP] Fetching via Tauri HTTP:", url);
 
       const response = await tauriFetch(url, {
-        method: 'GET',
+        method: "GET",
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          'User-Agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
-      })
+      });
 
-      console.log('[SkillsMP] Response status:', response.status)
+      console.log("[SkillsMP] Response status:", response.status);
 
       if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`SkillsMP API error (${response.status}): ${text}`)
+        const text = await response.text();
+        throw new Error(`SkillsMP API error (${response.status}): ${text}`);
       }
 
-      const data = await response.json()
-      console.log('[SkillsMP] Raw response:', data)
+      const data = await response.json();
+      console.log("[SkillsMP] Raw response:", data);
 
       if (!data.success) {
-        throw new Error(data.error?.message || 'SkillsMP request failed')
+        throw new Error(data.error?.message || "SkillsMP request failed");
       }
 
       // Handle different response structures
-      let skills = data.data
+      let skills = data.data;
       if (!Array.isArray(skills)) {
-        console.warn(
-          '[SkillsMP] data.data is not an array:',
-          typeof skills,
-          skills,
-        )
+        console.warn("[SkillsMP] data.data is not an array:", typeof skills, skills);
         // Try to extract from nested structure
         if (skills && Array.isArray(skills.skills)) {
-          skills = skills.skills
+          skills = skills.skills;
         } else if (skills && Array.isArray(skills.results)) {
-          skills = skills.results
+          skills = skills.results;
         } else {
-          skills = []
+          skills = [];
         }
       }
-      console.log('[SkillsMP] Got', skills.length, 'skills')
+      console.log("[SkillsMP] Got", skills.length, "skills");
 
       return skills.map((s: any) => ({
         name: s.name,
-        description: s.description || '',
-        path: s.skillUrl || s.githubUrl || '', // Use skillUrl or githubUrl as path
+        description: s.description || "",
+        path: s.skillUrl || s.githubUrl || "", // Use skillUrl or githubUrl as path
         version: undefined,
         metadata: {
           // Use githubUrl directly - it's already a full URL
-          repo: s.githubUrl || '',
-          repo_url: s.githubUrl || '',
-          author: s.author || '',
-          skillUrl: s.skillUrl || '',
+          repo: s.githubUrl || "",
+          repo_url: s.githubUrl || "",
+          author: s.author || "",
+          skillUrl: s.skillUrl || "",
         },
-        source_id: 'skillsmp',
-        source_name: 'SkillsMP',
+        source_id: "skillsmp",
+        source_name: "SkillsMP",
         stars: s.stars || 0,
         repo: s.githubUrl, // For display purposes
         repo_url: s.githubUrl,
         tags: [],
-      }))
+      }));
     },
 
     async refreshAll() {
-      return this.fetchSkills(undefined, true)
+      return this.fetchSkills(undefined, true);
     },
 
     setSearchMode(mode: SearchMode) {
-      this.searchMode = mode
+      this.searchMode = mode;
     },
 
     // Placeholder for adding custom sources (to be implemented)
-    async addSource(
-      url: string,
-      name: string,
-      type?: 'registry' | 'local' | 'git',
-    ) {
+    async addSource(url: string, name: string, type?: "registry" | "local" | "git") {
       try {
-        this.sources = await invoke('add_marketplace_source', {
+        this.sources = await invoke("add_marketplace_source", {
           url,
           name,
           sourceType: type,
-        })
+        });
       } catch (e) {
-        console.error('Failed to add source:', e)
-        throw e
+        console.error("Failed to add source:", e);
+        throw e;
       }
     },
 
     async removeSource(id: string) {
       try {
-        this.sources = await invoke('remove_marketplace_source', { id })
+        this.sources = await invoke("remove_marketplace_source", { id });
       } catch (e) {
-        console.error('Failed to remove source:', e)
-        throw e
+        console.error("Failed to remove source:", e);
+        throw e;
       }
     },
 
     async toggleSource(id: string, enabled: boolean) {
       try {
-        this.sources = await invoke('toggle_marketplace_source', {
+        this.sources = await invoke("toggle_marketplace_source", {
           id,
           enabled,
-        })
+        });
       } catch (e) {
-        console.error('Failed to toggle source:', e)
-        throw e
+        console.error("Failed to toggle source:", e);
+        throw e;
       }
     },
 
     async fetchCachedSkills() {
       try {
-        this.cachedSkills = await invoke('get_cached_skills')
+        this.cachedSkills = await invoke("get_cached_skills");
       } catch (e) {
-        console.error('Failed to fetch cached skills:', e)
+        console.error("Failed to fetch cached skills:", e);
       }
     },
 
     async clearCache(skillName: string) {
       try {
-        await invoke('clear_skill_cache', { skillName })
-        await this.fetchCachedSkills()
+        await invoke("clear_skill_cache", { skillName });
+        await this.fetchCachedSkills();
       } catch (e) {
-        console.error('Failed to clear cache:', e)
-        throw e
+        console.error("Failed to clear cache:", e);
+        throw e;
       }
     },
 
     async clearAllCache() {
       try {
-        await invoke('clear_all_cache')
-        await this.fetchCachedSkills()
+        await invoke("clear_all_cache");
+        await this.fetchCachedSkills();
       } catch (e) {
-        console.error('Failed to clear all cache:', e)
-        throw e
+        console.error("Failed to clear all cache:", e);
+        throw e;
       }
     },
   },
-})
+});

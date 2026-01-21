@@ -1,50 +1,43 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import Modal from '@/components/common/Modal.vue'
-import { useAgentsStore } from '@/stores/agents'
-import AgentIcon from '@/components/icons/AgentIcon.vue'
-import { CheckCircle2, XCircle, Rocket, ArrowRight } from 'lucide-vue-next'
+import { ref, computed } from "vue";
+import Modal from "@/components/common/Modal.vue";
+import { useAgentsStore } from "@/stores/agents";
+import AgentIcon from "@/components/icons/AgentIcon.vue";
+import { CheckCircle2, XCircle, Rocket, ArrowRight } from "lucide-vue-next";
 
 defineProps<{
-  show: boolean
-}>()
+  show: boolean;
+}>();
 
 const emit = defineEmits<{
-  (e: 'close'): void
-}>()
+  (e: "close"): void;
+}>();
 
-const agentsStore = useAgentsStore()
-const step = ref(1)
+const agentsStore = useAgentsStore();
+const step = ref(1);
 
 const steps = [
-  { id: 1, title: 'Welcome' },
-  { id: 2, title: 'Detect Agents' },
-  { id: 3, title: 'Ready!' },
-]
+  { id: 1, title: "Welcome" },
+  { id: 2, title: "Detect Agents" },
+  { id: 3, title: "Ready!" },
+];
 
 async function nextStep() {
   if (step.value === 1) {
-    step.value = 2
-    await agentsStore.fetchAgents()
+    step.value = 2;
+    await agentsStore.fetchAgents();
   } else if (step.value === 2) {
-    step.value = 3
+    step.value = 3;
   } else {
-    emit('close')
+    emit("close");
   }
 }
 
-const installedAgentsCount = computed(
-  () => agentsStore.agents.filter((a) => a.installed).length,
-)
+const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.installed).length);
 </script>
 
 <template>
-  <Modal
-    :show="show"
-    title="Welcome to Skill Manager"
-    :maxWidth="'600px'"
-    @close="() => {}"
-  >
+  <Modal :show="show" title="Welcome to Skill Manager" :maxWidth="'600px'" @close="() => {}">
     <div class="onboarding-content">
       <!-- Step 1: Welcome -->
       <div v-if="step === 1" class="step step-1">
@@ -53,8 +46,8 @@ const installedAgentsCount = computed(
         </div>
         <h2>Supercharge your AI Agents</h2>
         <p>
-          Skill Manager helps you discover, install, and manage skills for your
-          favorite coding assistants like Cursor, Claude Code, and more.
+          Skill Manager helps you discover, install, and manage skills for your favorite coding
+          assistants like Cursor, Claude Code, and more.
         </p>
         <div class="features-list">
           <div class="feature-item">
@@ -89,14 +82,11 @@ const installedAgentsCount = computed(
             class="agent-card"
             :class="{ installed: agent.installed }"
           >
-            <AgentIcon
-              :type="agentsStore.getIcon(agent.agent_type)"
-              :size="32"
-            />
+            <AgentIcon :type="agentsStore.getIcon(agent.agent_type)" :size="32" />
             <div class="agent-info">
               <span class="agent-name">{{ agent.display_name }}</span>
               <span class="agent-status">
-                {{ agent.installed ? 'Detected' : 'Not Found' }}
+                {{ agent.installed ? "Detected" : "Not Found" }}
               </span>
             </div>
             <CheckCircle2 v-if="agent.installed" class="status-icon success" />
@@ -112,8 +102,8 @@ const installedAgentsCount = computed(
         </div>
         <h2>All Set!</h2>
         <p>
-          We detected <strong>{{ installedAgentsCount }}</strong> agents on your
-          system. You're ready to start exploring the marketplace.
+          We detected <strong>{{ installedAgentsCount }}</strong> agents on your system. You're
+          ready to start exploring the marketplace.
         </p>
       </div>
     </div>
@@ -129,7 +119,7 @@ const installedAgentsCount = computed(
           ></span>
         </div>
         <button class="btn-primary" @click="nextStep">
-          <span>{{ step === 3 ? 'Get Started' : 'Continue' }}</span>
+          <span>{{ step === 3 ? "Get Started" : "Continue" }}</span>
           <ArrowRight v-if="step < 3" :size="16" />
         </button>
       </div>

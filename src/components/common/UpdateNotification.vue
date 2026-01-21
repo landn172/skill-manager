@@ -1,91 +1,85 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { check, Update } from '@tauri-apps/plugin-updater'
-import { relaunch } from '@tauri-apps/plugin-process'
-import {
-  Download,
-  RefreshCw,
-  X,
-  CheckCircle,
-  AlertCircle,
-} from 'lucide-vue-next'
+import { ref, onMounted } from "vue";
+import { check, Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { Download, RefreshCw, X, CheckCircle, AlertCircle } from "lucide-vue-next";
 
-const updateAvailable = ref(false)
-const updateInfo = ref<Update | null>(null)
-const isDownloading = ref(false)
-const downloadProgress = ref(0)
-const downloadTotal = ref(0)
-const updateError = ref<string | null>(null)
-const showNotification = ref(true)
-const updateComplete = ref(false)
+const updateAvailable = ref(false);
+const updateInfo = ref<Update | null>(null);
+const isDownloading = ref(false);
+const downloadProgress = ref(0);
+const downloadTotal = ref(0);
+const updateError = ref<string | null>(null);
+const showNotification = ref(true);
+const updateComplete = ref(false);
 
 onMounted(async () => {
-  await checkForUpdates()
-})
+  await checkForUpdates();
+});
 
 async function checkForUpdates() {
   try {
-    updateError.value = null
-    const update = await check()
+    updateError.value = null;
+    const update = await check();
     if (update) {
-      updateInfo.value = update
-      updateAvailable.value = true
+      updateInfo.value = update;
+      updateAvailable.value = true;
     }
   } catch (error) {
-    console.error('Failed to check for updates:', error)
+    console.error("Failed to check for updates:", error);
     // Silently fail - don't show error for update check failures
   }
 }
 
 async function downloadAndInstall() {
-  if (!updateInfo.value) return
+  if (!updateInfo.value) return;
 
   try {
-    isDownloading.value = true
-    updateError.value = null
-    downloadProgress.value = 0
+    isDownloading.value = true;
+    updateError.value = null;
+    downloadProgress.value = 0;
 
     await updateInfo.value.downloadAndInstall((event) => {
       switch (event.event) {
-        case 'Started':
-          downloadTotal.value = event.data.contentLength ?? 0
-          break
-        case 'Progress':
-          downloadProgress.value += event.data.chunkLength
-          break
-        case 'Finished':
-          updateComplete.value = true
-          break
+        case "Started":
+          downloadTotal.value = event.data.contentLength ?? 0;
+          break;
+        case "Progress":
+          downloadProgress.value += event.data.chunkLength;
+          break;
+        case "Finished":
+          updateComplete.value = true;
+          break;
       }
-    })
+    });
 
     // Wait a moment then relaunch
     setTimeout(async () => {
-      await relaunch()
-    }, 1500)
+      await relaunch();
+    }, 1500);
   } catch (error) {
-    console.error('Failed to install update:', error)
-    updateError.value = error instanceof Error ? error.message : 'Update failed'
-    isDownloading.value = false
+    console.error("Failed to install update:", error);
+    updateError.value = error instanceof Error ? error.message : "Update failed";
+    isDownloading.value = false;
   }
 }
 
 function dismiss() {
-  showNotification.value = false
+  showNotification.value = false;
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
 const progressPercent = computed(() => {
-  if (downloadTotal.value === 0) return 0
-  return Math.round((downloadProgress.value / downloadTotal.value) * 100)
-})
+  if (downloadTotal.value === 0) return 0;
+  return Math.round((downloadProgress.value / downloadTotal.value) * 100);
+});
 </script>
 
 <template>
@@ -129,16 +123,14 @@ const progressPercent = computed(() => {
           <div class="text">
             <span class="title">Downloading update...</span>
             <span class="subtitle">
-              {{ formatBytes(downloadProgress) }} /
-              {{ formatBytes(downloadTotal) }} ({{ progressPercent }}%)
+              {{ formatBytes(downloadProgress) }} / {{ formatBytes(downloadTotal) }} ({{
+                progressPercent
+              }}%)
             </span>
           </div>
         </div>
         <div class="progress-bar">
-          <div
-            class="progress-fill"
-            :style="{ width: `${progressPercent}%` }"
-          ></div>
+          <div class="progress-fill" :style="{ width: `${progressPercent}%` }"></div>
         </div>
       </template>
 
@@ -147,17 +139,13 @@ const progressPercent = computed(() => {
         <div class="notification-content">
           <Download class="icon" :size="20" />
           <div class="text">
-            <span class="title"
-              >Update available: v{{ updateInfo?.version }}</span
-            >
+            <span class="title">Update available: v{{ updateInfo?.version }}</span>
             <span v-if="updateInfo?.body" class="subtitle"
               >{{ updateInfo.body.slice(0, 100)
-              }}{{ updateInfo.body.length > 100 ? '...' : '' }}</span
+              }}{{ updateInfo.body.length > 100 ? "..." : "" }}</span
             >
           </div>
-          <button class="action-btn" @click="downloadAndInstall">
-            Update Now
-          </button>
+          <button class="action-btn" @click="downloadAndInstall">Update Now</button>
         </div>
       </template>
     </div>
@@ -165,10 +153,10 @@ const progressPercent = computed(() => {
 </template>
 
 <script lang="ts">
-import { computed } from 'vue'
+import { computed } from "vue";
 export default {
-  name: 'UpdateNotification',
-}
+  name: "UpdateNotification",
+};
 </script>
 
 <style scoped>
@@ -267,11 +255,7 @@ export default {
 }
 
 .action-btn {
-  background: linear-gradient(
-    135deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   color: white;
   border: none;
   border-radius: 8px;
@@ -312,11 +296,7 @@ export default {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
   border-radius: 2px;
   transition: width 0.3s ease;
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from "vue";
 import {
   Download,
   Trash2,
@@ -9,129 +9,117 @@ import {
   Edit3,
   Database,
   RefreshCw,
-} from 'lucide-vue-next'
-import { invoke } from '@tauri-apps/api/core'
-import { openUrl } from '@tauri-apps/plugin-opener'
-import type { MarketplaceSkill, Skill } from '@/types'
-import AgentIcon from '@/components/icons/AgentIcon.vue'
-import { useSkillsStore } from '@/stores/skills'
-import { useAgentsStore } from '@/stores/agents'
-import { useMarketplaceStore } from '@/stores/marketplace'
+} from "lucide-vue-next";
+import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { MarketplaceSkill, Skill } from "@/types";
+import AgentIcon from "@/components/icons/AgentIcon.vue";
+import { useSkillsStore } from "@/stores/skills";
+import { useAgentsStore } from "@/stores/agents";
+import { useMarketplaceStore } from "@/stores/marketplace";
 
-const agentsStore = useAgentsStore()
+const agentsStore = useAgentsStore();
 
 const props = defineProps<{
-  skill: MarketplaceSkill | Skill
-  showSource?: boolean
-}>()
+  skill: MarketplaceSkill | Skill;
+  showSource?: boolean;
+}>();
 
 const emit = defineEmits<{
-  (e: 'install', skill: Skill): void
-  (e: 'uninstall', skillName: string): void
-  (e: 'update', skill: Skill): void
-  (e: 'delete', skill: Skill): void
-  (e: 'edit', skill: Skill): void
-}>()
+  (e: "install", skill: Skill): void;
+  (e: "uninstall", skillName: string): void;
+  (e: "update", skill: Skill): void;
+  (e: "delete", skill: Skill): void;
+  (e: "edit", skill: Skill): void;
+}>();
 
-const skillsStore = useSkillsStore()
-const isInstalled = computed(() => skillsStore.isInstalled(props.skill.name))
-const installedSkill = computed(() =>
-  skillsStore.getSkillByName(props.skill.name),
-)
-const installedVersion = computed(() => installedSkill.value?.installed_version)
+const skillsStore = useSkillsStore();
+const isInstalled = computed(() => skillsStore.isInstalled(props.skill.name));
+const installedSkill = computed(() => skillsStore.getSkillByName(props.skill.name));
+const installedVersion = computed(() => installedSkill.value?.installed_version);
 
-const installedAgents = computed(() => installedSkill.value?.agents || [])
+const installedAgents = computed(() => installedSkill.value?.agents || []);
 
 const hasUpdate = computed(() => {
-  if (!isInstalled.value || !props.skill.version || !installedVersion.value)
-    return false
-  return props.skill.version !== installedVersion.value
-})
+  if (!isInstalled.value || !props.skill.version || !installedVersion.value) return false;
+  return props.skill.version !== installedVersion.value;
+});
 
 // Get the external URL (GitHub or SkillsMP page)
 const externalUrl = computed(() => {
-  const skill = props.skill as MarketplaceSkill
+  const skill = props.skill as MarketplaceSkill;
   // Priority: repo_url (GitHub) > skillUrl (SkillsMP page) > metadata.repo_url
-  return (
-    skill.repo_url ||
-    skill.metadata?.skillUrl ||
-    skill.metadata?.repo_url ||
-    null
-  )
-})
+  return skill.repo_url || skill.metadata?.skillUrl || skill.metadata?.repo_url || null;
+});
 
 // Check if this is a local skill (from a Local source)
 const isLocalSkill = computed(() => {
-  const skill = props.skill as MarketplaceSkill
+  const skill = props.skill as MarketplaceSkill;
   const result =
-    skill.source_id?.startsWith('custom_') ||
-    skill.source_name?.toLowerCase() === 'local'
-  return result
-})
+    skill.source_id?.startsWith("custom_") || skill.source_name?.toLowerCase() === "local";
+  return result;
+});
 
 const canInstallMore = computed(() => {
   // If not installed at all, yes
-  if (!isInstalled.value) return true
+  if (!isInstalled.value) return true;
 
   // If installed, checks if there are any agents that don't have it
   // We need to compare "all installed agents in system" vs "agents having this skill"
-  const allInstalledAgents = agentsStore.agents.filter((a) => a.installed)
-  const skillAgents = installedAgents.value
+  const allInstalledAgents = agentsStore.agents.filter((a) => a.installed);
+  const skillAgents = installedAgents.value;
 
   // If we have more installed agents than the skill has, we can install to them
-  return allInstalledAgents.length > skillAgents.length
-})
+  return allInstalledAgents.length > skillAgents.length;
+});
 
 // Open the installed skill's directory
 const handleOpenFolder = async () => {
   try {
     // Use the installed skill's path, not the marketplace skill's path (which is a URL)
-    const pathToOpen = installedSkill.value?.path
+    const pathToOpen = installedSkill.value?.path;
     if (pathToOpen) {
-      await invoke('open_in_explorer', { path: pathToOpen })
+      await invoke("open_in_explorer", { path: pathToOpen });
     } else {
-      alert('Could not find installed skill path')
+      alert("Could not find installed skill path");
     }
   } catch (e) {
-    alert(`Failed to open folder: ${e}`)
+    alert(`Failed to open folder: ${e}`);
   }
-}
+};
 
 // Open external link (GitHub or SkillsMP page)
 const handleOpenExternal = async () => {
   if (externalUrl.value) {
     try {
-      await openUrl(externalUrl.value)
+      await openUrl(externalUrl.value);
     } catch (e) {
       // Fallback to window.open
-      window.open(externalUrl.value, '_blank')
+      window.open(externalUrl.value, "_blank");
     }
   }
-}
+};
 
 // Open skill in specific agent
 const handleOpenInAgent = async (agent: string) => {
   // Use the specific path for this agent if available, fallback to default path
-  const path =
-    installedSkill.value?.agent_paths?.[agent] || installedSkill.value?.path
-  if (!path) return
+  const path = installedSkill.value?.agent_paths?.[agent] || installedSkill.value?.path;
+  if (!path) return;
 
   try {
-    await invoke('open_in_agent', { path, agent })
+    await invoke("open_in_agent", { path, agent });
   } catch (e) {
-    alert(`Failed to open in agent: ${e}`)
+    alert(`Failed to open in agent: ${e}`);
   }
-}
+};
 
-const marketplaceStore = useMarketplaceStore()
-const isCached = computed(() =>
-  marketplaceStore.isSkillCached(props.skill.name),
-)
+const marketplaceStore = useMarketplaceStore();
+const isCached = computed(() => marketplaceStore.isSkillCached(props.skill.name));
 const cachedAt = computed(() => {
-  const dateStr = marketplaceStore.getCachedAt(props.skill.name)
-  if (!dateStr) return null
-  return new Date(dateStr).toLocaleDateString()
-})
+  const dateStr = marketplaceStore.getCachedAt(props.skill.name);
+  if (!dateStr) return null;
+  return new Date(dateStr).toLocaleDateString();
+});
 
 const handleClearCache = async () => {
   if (
@@ -139,9 +127,9 @@ const handleClearCache = async () => {
       `Clear download cache for ${props.skill.name}? This will force a fresh download on next install.`,
     )
   ) {
-    await marketplaceStore.clearCache(props.skill.name)
+    await marketplaceStore.clearCache(props.skill.name);
   }
-}
+};
 </script>
 
 <template>
@@ -149,14 +137,9 @@ const handleClearCache = async () => {
     <div class="card-header">
       <div class="title-row">
         <h3 class="name">{{ skill.name }}</h3>
-        <span v-if="skill.version" class="version-badge"
-          >v{{ skill.version }}</span
-        >
+        <span v-if="skill.version" class="version-badge">v{{ skill.version }}</span>
         <!-- Installed Agent Icons -->
-        <div
-          v-if="isInstalled && installedAgents.length > 0"
-          class="installed-agents"
-        >
+        <div v-if="isInstalled && installedAgents.length > 0" class="installed-agents">
           <div
             v-for="agent in installedAgents"
             :key="agent"
@@ -172,11 +155,7 @@ const handleClearCache = async () => {
       <div v-if="showSource" class="source">
         {{ (skill as MarketplaceSkill).source_name }}
       </div>
-      <div
-        v-if="isCached"
-        class="cached-badge"
-        :title="`Cached on ${cachedAt}`"
-      >
+      <div v-if="isCached" class="cached-badge" :title="`Cached on ${cachedAt}`">
         <Database :size="10" />
         <span>Cached</span>
       </div>
@@ -186,11 +165,7 @@ const handleClearCache = async () => {
 
     <div class="card-footer">
       <div class="tags">
-        <span
-          v-for="tag in (skill as MarketplaceSkill).tags"
-          :key="tag"
-          class="tag"
-        >
+        <span v-for="tag in (skill as MarketplaceSkill).tags" :key="tag" class="tag">
           {{ tag }}
         </span>
       </div>
@@ -246,11 +221,7 @@ const handleClearCache = async () => {
           <Folder :size="16" />
         </button>
 
-        <button
-          v-if="isInstalled && hasUpdate"
-          class="update-btn"
-          @click="emit('update', skill)"
-        >
+        <button v-if="isInstalled && hasUpdate" class="update-btn" @click="emit('update', skill)">
           <PlusCircle :size="16" />
           <span>Update</span>
         </button>
@@ -266,19 +237,11 @@ const handleClearCache = async () => {
           <span>Add</span>
         </button>
 
-        <button
-          v-if="isInstalled"
-          class="uninstall-btn"
-          @click="emit('uninstall', skill.name)"
-        >
+        <button v-if="isInstalled" class="uninstall-btn" @click="emit('uninstall', skill.name)">
           <Trash2 :size="16" />
         </button>
 
-        <button
-          v-if="!isInstalled"
-          class="install-btn"
-          @click="emit('install', skill)"
-        >
+        <button v-if="!isInstalled" class="install-btn" @click="emit('install', skill)">
           <Download :size="16" />
           <span>Install</span>
         </button>

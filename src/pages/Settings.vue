@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
-import { useAgentsStore } from '@/stores/agents'
-import { useMarketplaceStore } from '@/stores/marketplace'
+import { onMounted, ref, computed } from "vue";
+import { useAgentsStore } from "@/stores/agents";
+import { useMarketplaceStore } from "@/stores/marketplace";
 import {
   CheckCircle2,
   XCircle,
@@ -19,149 +19,137 @@ import {
   Download,
   Upload,
   Edit2,
-} from 'lucide-vue-next'
-import { useThemeStore } from '@/stores/theme'
-import AgentIcon from '@/components/icons/AgentIcon.vue'
-import { useProjectStore } from '@/stores/project'
-import { open, save } from '@tauri-apps/plugin-dialog'
-import { homeDir } from '@tauri-apps/api/path'
-import { invoke } from '@tauri-apps/api/core'
-import { writeTextFile, readTextFile, readFile } from '@tauri-apps/plugin-fs'
+} from "lucide-vue-next";
+import { useThemeStore } from "@/stores/theme";
+import AgentIcon from "@/components/icons/AgentIcon.vue";
+import { useProjectStore } from "@/stores/project";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { homeDir } from "@tauri-apps/api/path";
+import { invoke } from "@tauri-apps/api/core";
+import { writeTextFile, readTextFile, readFile } from "@tauri-apps/plugin-fs";
 
-const agentsStore = useAgentsStore()
-const marketplaceStore = useMarketplaceStore()
-const projectStore = useProjectStore()
-const themeStore = useThemeStore()
+const agentsStore = useAgentsStore();
+const marketplaceStore = useMarketplaceStore();
+const projectStore = useProjectStore();
+const themeStore = useThemeStore();
 
 // API Key management
-const apiKeyInput = ref('')
-const maskedApiKey = ref<string | null>(null)
-const apiKeySource = ref<string | null>(null) // 'env' or 'db'
-const savingApiKey = ref(false)
+const apiKeyInput = ref("");
+const maskedApiKey = ref<string | null>(null);
+const apiKeySource = ref<string | null>(null); // 'env' or 'db'
+const savingApiKey = ref(false);
 
-const hasApiKey = computed(() => !!maskedApiKey.value)
-const isFromEnv = computed(() => apiKeySource.value === 'env')
+const hasApiKey = computed(() => !!maskedApiKey.value);
+const isFromEnv = computed(() => apiKeySource.value === "env");
 
 async function loadApiKey() {
   try {
-    maskedApiKey.value = await invoke<string | null>(
-      'get_skillsmp_api_key_masked',
-    )
-    apiKeySource.value = await invoke<string | null>(
-      'get_skillsmp_api_key_source',
-    )
+    maskedApiKey.value = await invoke<string | null>("get_skillsmp_api_key_masked");
+    apiKeySource.value = await invoke<string | null>("get_skillsmp_api_key_source");
   } catch (e) {
-    console.error('Failed to load API key', e)
+    console.error("Failed to load API key", e);
   }
 }
 
 async function saveApiKey() {
-  if (!apiKeyInput.value.trim()) return
+  if (!apiKeyInput.value.trim()) return;
 
-  savingApiKey.value = true
+  savingApiKey.value = true;
   try {
-    await invoke('set_skillsmp_api_key', { key: apiKeyInput.value.trim() })
-    apiKeyInput.value = ''
-    await loadApiKey()
-    alert('API key saved successfully!')
+    await invoke("set_skillsmp_api_key", { key: apiKeyInput.value.trim() });
+    apiKeyInput.value = "";
+    await loadApiKey();
+    alert("API key saved successfully!");
   } catch (e) {
-    alert(`Failed to save API key: ${e}`)
+    alert(`Failed to save API key: ${e}`);
   } finally {
-    savingApiKey.value = false
+    savingApiKey.value = false;
   }
 }
 
-const showAddRegistryModal = ref(false)
-const registryUrl = ref('')
-const registryName = ref('')
-const addingRegistry = ref(false)
+const showAddRegistryModal = ref(false);
+const registryUrl = ref("");
+const registryName = ref("");
+const addingRegistry = ref(false);
 
 async function saveRegistrySource() {
-  if (!registryUrl.value.trim() || !registryName.value.trim()) return
+  if (!registryUrl.value.trim() || !registryName.value.trim()) return;
 
-  addingRegistry.value = true
+  addingRegistry.value = true;
   try {
-    await marketplaceStore.addSource(
-      registryUrl.value.trim(),
-      registryName.value.trim(),
-    )
-    showAddRegistryModal.value = false
-    registryUrl.value = ''
-    registryName.value = ''
-    alert('Registry source added successfully!')
+    await marketplaceStore.addSource(registryUrl.value.trim(), registryName.value.trim());
+    showAddRegistryModal.value = false;
+    registryUrl.value = "";
+    registryName.value = "";
+    alert("Registry source added successfully!");
   } catch (e) {
-    alert(`Failed to add registry source: ${e}`)
+    alert(`Failed to add registry source: ${e}`);
   } finally {
-    addingRegistry.value = false
+    addingRegistry.value = false;
   }
 }
 
 async function removeSource(id: string) {
-  if (!confirm('Are you sure you want to remove this source?')) return
+  if (!confirm("Are you sure you want to remove this source?")) return;
   try {
-    await marketplaceStore.removeSource(id)
+    await marketplaceStore.removeSource(id);
   } catch (e) {
-    alert(`Failed to remove source: ${e}`)
+    alert(`Failed to remove source: ${e}`);
   }
 }
 
 async function toggleSource(id: string, event: Event) {
-  const checkbox = event.target as HTMLInputElement
+  const checkbox = event.target as HTMLInputElement;
   try {
-    await marketplaceStore.toggleSource(id, checkbox.checked)
+    await marketplaceStore.toggleSource(id, checkbox.checked);
   } catch (e) {
-    alert(`Failed to toggle source: ${e}`)
-    checkbox.checked = !checkbox.checked // Revert
+    alert(`Failed to toggle source: ${e}`);
+    checkbox.checked = !checkbox.checked; // Revert
   }
 }
 async function clearApiKey() {
-  if (
-    !confirm(
-      'Are you sure you want to remove your SkillsMP API key from Settings?',
-    )
-  )
-    return
+  if (!confirm("Are you sure you want to remove your SkillsMP API key from Settings?")) return;
 
   try {
-    await invoke('clear_skillsmp_api_key')
-    await loadApiKey() // Reload to check if still exists in .env
+    await invoke("clear_skillsmp_api_key");
+    await loadApiKey(); // Reload to check if still exists in .env
     if (!hasApiKey.value) {
-      alert('API key removed.')
+      alert("API key removed.");
     } else {
-      alert('Database key removed. Key from .env is still active.')
+      alert("Database key removed. Key from .env is still active.");
     }
   } catch (e) {
-    alert(`Failed to clear API key: ${e}`)
+    alert(`Failed to clear API key: ${e}`);
   }
 }
 
 onMounted(() => {
-  agentsStore.fetchAgents()
-  marketplaceStore.fetchSources()
-  projectStore.fetchProjects()
-  loadApiKey()
-})
+  agentsStore.fetchAgents();
+  marketplaceStore.fetchSources();
+  projectStore.fetchProjects();
+  loadApiKey();
+});
 
-const clearingCache = ref(false)
+const clearingCache = ref(false);
 
 async function handleClearCache() {
   if (
     !confirm(
-      'Are you sure you want to clear the skills cache? This will force a fresh fetch from all sources.',
+      "Are you sure you want to clear the skills cache? This will force a fresh fetch from all sources.",
     )
   )
-    return
+    return;
 
-  clearingCache.value = true
+  clearingCache.value = true;
   try {
-    const message = await invoke<string>('clear_cache')
-    alert(message)
+    const message = await invoke<string>("clear_cache");
+    alert(message);
     // Optionally refresh marketplace store if needed
-    await marketplaceStore.fetchSources()
+    await marketplaceStore.fetchSources();
   } catch (e) {
-    alert(`Failed to clear cache: ${e}`)
+    alert(`Failed to clear cache: ${e}`);
   } finally {
-    clearingCache.value = false
+    clearingCache.value = false;
   }
 }
 
@@ -171,16 +159,16 @@ const handleAddProject = async () => {
       directory: true,
       multiple: false,
       defaultPath: await homeDir(),
-    })
+    });
 
-    if (selected && typeof selected === 'string') {
-      const name = selected.split('/').pop() || 'New Project'
-      await projectStore.addProject(name, selected)
+    if (selected && typeof selected === "string") {
+      const name = selected.split("/").pop() || "New Project";
+      await projectStore.addProject(name, selected);
     }
   } catch (e) {
-    console.error('Failed to add project', e)
+    console.error("Failed to add project", e);
   }
-}
+};
 
 async function handleAddLocalSource() {
   try {
@@ -188,10 +176,10 @@ async function handleAddLocalSource() {
       directory: true,
       multiple: false,
       defaultPath: await homeDir(),
-    })
+    });
 
-    if (selected && typeof selected === 'string') {
-      const name = selected.split('/').pop() || 'Local Skills'
+    if (selected && typeof selected === "string") {
+      const name = selected.split("/").pop() || "Local Skills";
       // Prompt for name (optional, could use a modal but prompt is simple for now)
       // Since window.prompt might be blocked or ugly, let's just use directory name for now
       // or repurpose the registry modal?
@@ -199,79 +187,79 @@ async function handleAddLocalSource() {
       // Actually, let's use a browser prompt if possible or just auto-add.
       // Auto-add is smoothest.
 
-      await marketplaceStore.addSource(selected, name, 'local')
-      alert(`Added local source: ${name}`)
-      await marketplaceStore.fetchSkills() // Refresh skills to show new ones
+      await marketplaceStore.addSource(selected, name, "local");
+      alert(`Added local source: ${name}`);
+      await marketplaceStore.fetchSkills(); // Refresh skills to show new ones
     }
   } catch (e) {
-    alert(`Failed to add local source: ${e}`)
+    alert(`Failed to add local source: ${e}`);
   }
 }
 
 async function handleExportConfig() {
   try {
-    const json = await invoke<string>('export_config')
+    const json = await invoke<string>("export_config");
     const filePath = await save({
-      filters: [{ name: 'JSON', extensions: ['json'] }],
-      defaultPath: 'skill-manager-config.json',
-    })
+      filters: [{ name: "JSON", extensions: ["json"] }],
+      defaultPath: "skill-manager-config.json",
+    });
 
     if (filePath) {
-      await writeTextFile(filePath, json)
-      alert('Configuration exported successfully!')
+      await writeTextFile(filePath, json);
+      alert("Configuration exported successfully!");
     }
   } catch (e) {
-    alert(`Failed to export config: ${e}`)
+    alert(`Failed to export config: ${e}`);
   }
 }
 
 async function handleImportConfig() {
   try {
     const filePath = await open({
-      filters: [{ name: 'JSON', extensions: ['json'] }],
+      filters: [{ name: "JSON", extensions: ["json"] }],
       multiple: false,
-    })
+    });
 
-    if (filePath && typeof filePath === 'string') {
-      const json = await readTextFile(filePath)
-      await invoke('import_config', { json })
-      alert('Configuration imported successfully! refreshing...')
-      marketplaceStore.fetchSources()
+    if (filePath && typeof filePath === "string") {
+      const json = await readTextFile(filePath);
+      await invoke("import_config", { json });
+      alert("Configuration imported successfully! refreshing...");
+      marketplaceStore.fetchSources();
     }
   } catch (e) {
-    alert(`Failed to import config: ${e}`)
+    alert(`Failed to import config: ${e}`);
   }
 }
 
 // Agent Path Management
-const editingAgent = ref<any>(null)
-const editAgentPath = ref('')
-const savingAgentPath = ref(false)
+const editingAgent = ref<any>(null);
+const editAgentPath = ref("");
+const savingAgentPath = ref(false);
 
 function openEditAgent(agent: any) {
-  editingAgent.value = agent
-  editAgentPath.value = agent.global_skills_dir
+  editingAgent.value = agent;
+  editAgentPath.value = agent.global_skills_dir;
 }
 
 async function saveAgentPath() {
-  if (!editingAgent.value) return
+  if (!editingAgent.value) return;
 
-  savingAgentPath.value = true
+  savingAgentPath.value = true;
   try {
-    await invoke('update_agent_path', {
+    await invoke("update_agent_path", {
       agentType: editingAgent.value.agent_type,
       path: editAgentPath.value,
-    })
+    });
 
     // Refresh agents
-    await agentsStore.fetchAgents()
-    editingAgent.value = null
-    editAgentPath.value = ''
-    alert('Agent path updated!')
+    await agentsStore.fetchAgents();
+    editingAgent.value = null;
+    editAgentPath.value = "";
+    alert("Agent path updated!");
   } catch (e) {
-    alert(`Failed to update agent path: ${e}`)
+    alert(`Failed to update agent path: ${e}`);
   } finally {
-    savingAgentPath.value = false
+    savingAgentPath.value = false;
   }
 }
 
@@ -281,81 +269,79 @@ async function browseForAgentPath() {
       directory: true,
       multiple: false,
       defaultPath: await homeDir(),
-    })
+    });
 
-    if (selected && typeof selected === 'string') {
-      editAgentPath.value = selected
+    if (selected && typeof selected === "string") {
+      editAgentPath.value = selected;
     }
   } catch (e) {
-    console.error(e)
+    console.error(e);
   }
 }
 
 // Custom Agent Management
-const showAddAgentModal = ref(false)
-const newAgentName = ref('')
-const newAgentPath = ref('')
-const newAgentIconType = ref<'emoji' | 'image'>('emoji')
-const newAgentIcon = ref('🚀')
-const addingAgent = ref(false)
+const showAddAgentModal = ref(false);
+const newAgentName = ref("");
+const newAgentPath = ref("");
+const newAgentIconType = ref<"emoji" | "image">("emoji");
+const newAgentIcon = ref("🚀");
+const addingAgent = ref(false);
 
 async function pickIconImage() {
   try {
     const selected = await open({
       multiple: false,
-      filters: [
-        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'svg', 'webp'] },
-      ],
-    })
-    if (selected && typeof selected === 'string') {
-      const data = await readFile(selected)
-      const blob = new Blob([data])
-      const reader = new FileReader()
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "webp"] }],
+    });
+    if (selected && typeof selected === "string") {
+      const data = await readFile(selected);
+      const blob = new Blob([data]);
+      const reader = new FileReader();
       reader.onload = () => {
-        newAgentIcon.value = reader.result as string
-      }
-      reader.readAsDataURL(blob)
+        newAgentIcon.value = reader.result as string;
+      };
+      reader.readAsDataURL(blob);
     }
   } catch (e) {
-    console.error('Failed to pick icon image', e)
+    console.error("Failed to pick icon image", e);
   }
 }
 
 async function addCustomAgent() {
-  if (!newAgentName.value || !newAgentPath.value) return
+  if (!newAgentName.value || !newAgentPath.value) return;
 
-  addingAgent.value = true
+  addingAgent.value = true;
   try {
-    await invoke('add_custom_agent', {
+    await invoke("add_custom_agent", {
       name: newAgentName.value,
       path: newAgentPath.value,
       icon: newAgentIcon.value,
-    })
+    });
 
-    await agentsStore.fetchAgents()
-    showAddAgentModal.value = false
-    newAgentName.value = ''
-    newAgentPath.value = ''
-    newAgentIcon.value = '🚀'
-    newAgentIconType.value = 'emoji'
-    alert('Custom agent added!')
+    await agentsStore.fetchAgents();
+    showAddAgentModal.value = false;
+    newAgentName.value = "";
+    newAgentPath.value = "";
+    newAgentIcon.value = "🚀";
+    newAgentIconType.value = "emoji";
+    alert("Custom agent added!");
   } catch (e) {
-    alert(`Failed to add agent: ${e}`)
+    alert(`Failed to add agent: ${e}`);
   } finally {
-    addingAgent.value = false
+    addingAgent.value = false;
   }
 }
 
 async function removeCustomAgent(agent: any) {
-  if (!confirm(`Remove custom agent "${agent.display_name}"?`)) return
+  if (!confirm(`Remove custom agent "${agent.display_name}"?`)) return;
 
   try {
-    await invoke('remove_custom_agent', {
+    await invoke("remove_custom_agent", {
       agentType: agent.agent_type,
-    })
-    await agentsStore.fetchAgents()
+    });
+    await agentsStore.fetchAgents();
   } catch (e) {
-    alert(`Failed to remove agent: ${e}`)
+    alert(`Failed to remove agent: ${e}`);
   }
 }
 
@@ -365,13 +351,13 @@ async function browseForNewAgentPath() {
       directory: true,
       multiple: false,
       defaultPath: await homeDir(),
-    })
+    });
 
-    if (selected && typeof selected === 'string') {
-      newAgentPath.value = selected
+    if (selected && typeof selected === "string") {
+      newAgentPath.value = selected;
     }
   } catch (e) {
-    console.error(e)
+    console.error(e);
   }
 }
 </script>
@@ -389,9 +375,7 @@ async function browseForNewAgentPath() {
           <Palette :size="20" class="section-icon" />
           <h2>App Appearance</h2>
         </div>
-        <p class="section-desc">
-          Customize the look and feel of the application.
-        </p>
+        <p class="section-desc">Customize the look and feel of the application.</p>
 
         <div class="theme-selector">
           <button
@@ -428,8 +412,7 @@ async function browseForNewAgentPath() {
           <h2>SkillsMP API</h2>
         </div>
         <p class="section-desc">
-          Configure your SkillsMP API key to access 65,000+ skills from the
-          marketplace.
+          Configure your SkillsMP API key to access 65,000+ skills from the marketplace.
         </p>
 
         <div class="api-config">
@@ -458,7 +441,7 @@ async function browseForNewAgentPath() {
               :disabled="!apiKeyInput.trim() || savingApiKey"
               @click="saveApiKey"
             >
-              {{ savingApiKey ? 'Saving...' : 'Save Key' }}
+              {{ savingApiKey ? "Saving..." : "Save Key" }}
             </button>
           </div>
 
@@ -474,22 +457,13 @@ async function browseForNewAgentPath() {
           <ShieldCheck :size="20" class="section-icon" />
           <h2>Detected Agents</h2>
         </div>
-        <p class="section-desc">
-          We automatically detect installed coding agents on your system.
-        </p>
+        <p class="section-desc">We automatically detect installed coding agents on your system.</p>
 
         <div class="agents-list">
-          <div
-            v-for="agent in agentsStore.agents"
-            :key="agent.name"
-            class="agent-card"
-          >
+          <div v-for="agent in agentsStore.agents" :key="agent.name" class="agent-card">
             <div class="agent-info">
               <div class="agent-icon-wrap">
-                <AgentIcon
-                  :type="agentsStore.getIcon(agent.agent_type)"
-                  :size="24"
-                />
+                <AgentIcon :type="agentsStore.getIcon(agent.agent_type)" :size="24" />
               </div>
               <div class="agent-details">
                 <span class="agent-name">{{ agent.display_name }}</span>
@@ -507,11 +481,7 @@ async function browseForNewAgentPath() {
               </template>
             </div>
             <!-- Add Edit Button -->
-            <button
-              class="icon-btn edit-agent"
-              @click="openEditAgent(agent)"
-              title="Edit Path"
-            >
+            <button class="icon-btn edit-agent" @click="openEditAgent(agent)" title="Edit Path">
               <Edit2 :size="16" />
             </button>
             <button
@@ -541,11 +511,7 @@ async function browseForNewAgentPath() {
 
           <div class="form-group">
             <label>Agent Name</label>
-            <input
-              v-model="newAgentName"
-              placeholder="e.g. My IDE"
-              class="input-field"
-            />
+            <input v-model="newAgentName" placeholder="e.g. My IDE" class="input-field" />
           </div>
 
           <div class="form-group">
@@ -582,11 +548,7 @@ async function browseForNewAgentPath() {
                 </template>
                 <template v-else>
                   <button class="btn-secondary" @click="pickIconImage">
-                    {{
-                      newAgentIcon.startsWith('data:')
-                        ? 'Change Image'
-                        : 'Select Image'
-                    }}
+                    {{ newAgentIcon.startsWith("data:") ? "Change Image" : "Select Image" }}
                   </button>
                 </template>
               </div>
@@ -597,22 +559,18 @@ async function browseForNewAgentPath() {
             <label>Skills Directory Path</label>
             <div class="input-row">
               <input v-model="newAgentPath" class="input-field" />
-              <button class="btn-secondary" @click="browseForNewAgentPath">
-                Browse
-              </button>
+              <button class="btn-secondary" @click="browseForNewAgentPath">Browse</button>
             </div>
           </div>
 
           <div class="modal-actions">
-            <button class="btn-secondary" @click="showAddAgentModal = false">
-              Cancel
-            </button>
+            <button class="btn-secondary" @click="showAddAgentModal = false">Cancel</button>
             <button
               class="btn-primary"
               :disabled="!newAgentName || !newAgentPath || addingAgent"
               @click="addCustomAgent"
             >
-              {{ addingAgent ? 'Adding...' : 'Add Agent' }}
+              {{ addingAgent ? "Adding..." : "Add Agent" }}
             </button>
           </div>
         </div>
@@ -628,22 +586,14 @@ async function browseForNewAgentPath() {
             <label>Skills Directory Path</label>
             <div class="input-row">
               <input v-model="editAgentPath" class="input-field" />
-              <button class="btn-secondary" @click="browseForAgentPath">
-                Browse
-              </button>
+              <button class="btn-secondary" @click="browseForAgentPath">Browse</button>
             </div>
           </div>
 
           <div class="modal-actions">
-            <button class="btn-secondary" @click="editingAgent = null">
-              Cancel
-            </button>
-            <button
-              class="btn-primary"
-              :disabled="savingAgentPath"
-              @click="saveAgentPath"
-            >
-              {{ savingAgentPath ? 'Saving...' : 'Save Path' }}
+            <button class="btn-secondary" @click="editingAgent = null">Cancel</button>
+            <button class="btn-primary" :disabled="savingAgentPath" @click="saveAgentPath">
+              {{ savingAgentPath ? "Saving..." : "Save Path" }}
             </button>
           </div>
         </div>
@@ -654,9 +604,7 @@ async function browseForNewAgentPath() {
           <Globe :size="20" class="section-icon" />
           <h2>Marketplace Sources</h2>
         </div>
-        <p class="section-desc">
-          Manage the repositories where you discover new skills.
-        </p>
+        <p class="section-desc">Manage the repositories where you discover new skills.</p>
 
         <div class="sources-list">
           <div
@@ -668,15 +616,9 @@ async function browseForNewAgentPath() {
             <div class="source-info">
               <div class="source-name-row">
                 <span class="source-name">{{ source.name }}</span>
-                <span v-if="source.official" class="official-badge"
-                  >Official</span
-                >
-                <span v-if="source.source_type === 'api'" class="api-badge"
-                  >API</span
-                >
-                <span
-                  v-if="source.source_type === 'registry'"
-                  class="registry-badge"
+                <span v-if="source.official" class="official-badge">Official</span>
+                <span v-if="source.source_type === 'api'" class="api-badge">API</span>
+                <span v-if="source.source_type === 'registry'" class="registry-badge"
                   >Registry</span
                 >
               </div>
@@ -724,32 +666,22 @@ async function browseForNewAgentPath() {
 
           <div class="form-group">
             <label>Registry Name</label>
-            <input
-              v-model="registryName"
-              placeholder="e.g. My Team Skills"
-              class="input-field"
-            />
+            <input v-model="registryName" placeholder="e.g. My Team Skills" class="input-field" />
           </div>
 
           <div class="form-group">
             <label>Registry JSON URL</label>
-            <input
-              v-model="registryUrl"
-              placeholder="https://..."
-              class="input-field"
-            />
+            <input v-model="registryUrl" placeholder="https://..." class="input-field" />
           </div>
 
           <div class="modal-actions">
-            <button class="btn-secondary" @click="showAddRegistryModal = false">
-              Cancel
-            </button>
+            <button class="btn-secondary" @click="showAddRegistryModal = false">Cancel</button>
             <button
               class="btn-primary"
               :disabled="!registryName || !registryUrl || addingRegistry"
               @click="saveRegistrySource"
             >
-              {{ addingRegistry ? 'Adding...' : 'Add Source' }}
+              {{ addingRegistry ? "Adding..." : "Add Source" }}
             </button>
           </div>
         </div>
@@ -761,16 +693,11 @@ async function browseForNewAgentPath() {
           <h2>Managed Projects</h2>
         </div>
         <p class="section-desc">
-          Add the local directories where your projects are located to manage
-          their skills.
+          Add the local directories where your projects are located to manage their skills.
         </p>
 
         <div class="sources-list">
-          <div
-            v-for="project in projectStore.projects"
-            :key="project.id"
-            class="source-card"
-          >
+          <div v-for="project in projectStore.projects" :key="project.id" class="source-card">
             <div class="source-info">
               <div class="source-name-row">
                 <span class="source-name">{{ project.name }}</span>
@@ -778,10 +705,7 @@ async function browseForNewAgentPath() {
               <span class="source-url">{{ project.path }}</span>
             </div>
             <div class="source-actions">
-              <button
-                class="icon-btn delete"
-                @click="projectStore.removeProject(project.id!)"
-              >
+              <button class="icon-btn delete" @click="projectStore.removeProject(project.id!)">
                 <Trash2 :size="18" />
               </button>
             </div>
@@ -805,17 +729,12 @@ async function browseForNewAgentPath() {
         </p>
 
         <div class="cache-actions">
-          <button
-            class="btn-warning"
-            @click="handleClearCache"
-            :disabled="clearingCache"
-          >
+          <button class="btn-warning" @click="handleClearCache" :disabled="clearingCache">
             <Trash2 :size="16" />
-            {{ clearingCache ? 'Clearing...' : 'Clear Skills Cache' }}
+            {{ clearingCache ? "Clearing..." : "Clear Skills Cache" }}
           </button>
           <span class="cache-hint"
-            >This will clear all cached skill data from marketplace
-            sources.</span
+            >This will clear all cached skill data from marketplace sources.</span
           >
         </div>
       </section>
@@ -826,9 +745,7 @@ async function browseForNewAgentPath() {
         <Download :size="20" class="section-icon" />
         <h2>Data & Storage</h2>
       </div>
-      <p class="section-desc">
-        Manage your application data and configuration.
-      </p>
+      <p class="section-desc">Manage your application data and configuration.</p>
 
       <div class="data-actions">
         <button class="action-btn" @click="handleExportConfig">
@@ -1116,7 +1033,7 @@ h2 {
 
 .slider:before {
   position: absolute;
-  content: '';
+  content: "";
   height: 14px;
   width: 14px;
   left: 3px;
