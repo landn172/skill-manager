@@ -65,7 +65,7 @@ pub async fn migrate_existing_skills_to_hardlinks() -> Result<(), String> {
         );
 
         // Pick primary - just use the first one
-        let (primary_agent, primary_path) = &locations[0];
+        let (_primary_agent, primary_path) = &locations[0];
 
         // Migrate others
         for (agent_key, path) in locations.iter().skip(1) {

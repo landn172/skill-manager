@@ -31,7 +31,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-latest, windows-latest]
+        include:
+          - platform: macos-13
+            args: --target universal-apple-darwin
+          - platform: ubuntu-latest
+            args: ''
+          - platform: windows-latest
+            args: ''
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +48,8 @@ jobs:
           cache: 'npm'
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-13' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-latest'
         run: |
@@ -61,3 +69,4 @@ jobs:
           releaseBody: 'Automated release of Skill Manager ${{ github.ref_name }}.'
           releaseDraft: false
           prerelease: false
+          args: ${{ matrix.args }}

@@ -1,6 +1,4 @@
-use crate::models::config::AppConfig;
 use crate::models::marketplace::MarketplaceSource;
-use crate::utils::git::parse_source;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
