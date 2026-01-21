@@ -1,8 +1,10 @@
 pub mod agents;
 pub mod authoring;
+pub mod cache;
 pub mod config;
 pub mod installer;
 pub mod marketplace;
+pub mod migration;
 pub mod projects;
 pub mod registry;
 pub mod skills;

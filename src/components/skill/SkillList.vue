@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Pencil, Trash2 } from 'lucide-vue-next'
+import { Pencil, Trash2, PlusCircle } from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
 import type { InstalledSkill } from '@/types'
 import AgentIcon from '@/components/icons/AgentIcon.vue'
@@ -14,16 +14,25 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'edit', skill: InstalledSkill): void
   (e: 'uninstall', skill: InstalledSkill): void
+  (e: 'install', skill: InstalledSkill): void
 }>()
 
 const handleOpenInAgent = async (skill: InstalledSkill, agent: string) => {
   const path = skill.agent_paths?.[agent] || skill.path
   if (!path) return
+
   try {
     await invoke('open_in_agent', { path, agent })
   } catch (e) {
     alert(`Failed to open in agent: ${e}`)
   }
+}
+
+const canInstallMore = (skill: InstalledSkill) => {
+  // Check if there are any installed agents in the system that don't have this skill
+  const allInstalledAgents = agentsStore.agents.filter((a) => a.installed)
+  const skillAgents = skill.agents || []
+  return allInstalledAgents.length > skillAgents.length
 }
 </script>
 
@@ -48,6 +57,16 @@ const handleOpenInAgent = async (skill: InstalledSkill, agent: string) => {
       </div>
 
       <div class="skill-actions">
+        <!-- Supplemental Install Button -->
+        <button
+          v-if="canInstallMore(skill)"
+          class="action-btn add"
+          @click="emit('install', skill)"
+          title="Install to other agents"
+        >
+          <PlusCircle :size="18" />
+        </button>
+
         <button
           class="action-btn edit"
           @click="emit('edit', skill)"
@@ -161,5 +180,10 @@ const handleOpenInAgent = async (skill: InstalledSkill, agent: string) => {
 .action-btn.edit:hover {
   color: var(--accent-primary);
   background-color: rgba(139, 92, 246, 0.1);
+}
+
+.action-btn.add:hover {
+  color: var(--accent-success);
+  background-color: rgba(34, 197, 94, 0.1);
 }
 </style>

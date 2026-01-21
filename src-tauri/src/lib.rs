@@ -4,9 +4,11 @@ mod utils;
 
 use commands::agents::*;
 use commands::authoring::{create_skill, delete_local_skill, update_local_skill};
+use commands::cache::*;
 use commands::config::*;
 use commands::installer::*;
 use commands::marketplace::*;
+use commands::migration::*;
 use commands::projects::*;
 use commands::skills::*;
 use commands::skillsmp::*;
@@ -21,6 +23,15 @@ pub fn run() {
     init_db().expect("failed to initialize history database");
 
     tauri::Builder::default()
+        .setup(|_app| {
+            // Run migration in background
+            tauri::async_runtime::spawn(async {
+                if let Err(e) = migrate_existing_skills_to_hardlinks().await {
+                    println!("Migration failed: {}", e);
+                }
+            });
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
@@ -71,7 +82,10 @@ pub fn run() {
             // Utils
             open_in_explorer,
             get_install_history,
-            clear_cache
+            // Cache
+            get_cached_skills,
+            clear_skill_cache,
+            clear_all_cache
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

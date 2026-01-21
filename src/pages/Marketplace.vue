@@ -47,6 +47,7 @@ const editForm = ref({ name: '', description: '' })
 onMounted(() => {
   store.fetchSources()
   store.fetchSkills()
+  store.fetchCachedSkills()
   agentsStore.fetchAgents()
   skillsStore.fetchInstalledSkills()
 })

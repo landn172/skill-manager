@@ -7,6 +7,8 @@ import {
   PlusCircle,
   ExternalLink,
   Edit3,
+  Database,
+  RefreshCw,
 } from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
@@ -14,6 +16,7 @@ import type { MarketplaceSkill, Skill } from '@/types'
 import AgentIcon from '@/components/icons/AgentIcon.vue'
 import { useSkillsStore } from '@/stores/skills'
 import { useAgentsStore } from '@/stores/agents'
+import { useMarketplaceStore } from '@/stores/marketplace'
 
 const agentsStore = useAgentsStore()
 
@@ -66,6 +69,19 @@ const isLocalSkill = computed(() => {
   return result
 })
 
+const canInstallMore = computed(() => {
+  // If not installed at all, yes
+  if (!isInstalled.value) return true
+
+  // If installed, checks if there are any agents that don't have it
+  // We need to compare "all installed agents in system" vs "agents having this skill"
+  const allInstalledAgents = agentsStore.agents.filter((a) => a.installed)
+  const skillAgents = installedAgents.value
+
+  // If we have more installed agents than the skill has, we can install to them
+  return allInstalledAgents.length > skillAgents.length
+})
+
 // Open the installed skill's directory
 const handleOpenFolder = async () => {
   try {
@@ -106,6 +122,26 @@ const handleOpenInAgent = async (agent: string) => {
     alert(`Failed to open in agent: ${e}`)
   }
 }
+
+const marketplaceStore = useMarketplaceStore()
+const isCached = computed(() =>
+  marketplaceStore.isSkillCached(props.skill.name),
+)
+const cachedAt = computed(() => {
+  const dateStr = marketplaceStore.getCachedAt(props.skill.name)
+  if (!dateStr) return null
+  return new Date(dateStr).toLocaleDateString()
+})
+
+const handleClearCache = async () => {
+  if (
+    confirm(
+      `Clear download cache for ${props.skill.name}? This will force a fresh download on next install.`,
+    )
+  ) {
+    await marketplaceStore.clearCache(props.skill.name)
+  }
+}
 </script>
 
 <template>
@@ -136,6 +172,14 @@ const handleOpenInAgent = async (agent: string) => {
       <div v-if="showSource" class="source">
         {{ (skill as MarketplaceSkill).source_name }}
       </div>
+      <div
+        v-if="isCached"
+        class="cached-badge"
+        :title="`Cached on ${cachedAt}`"
+      >
+        <Database :size="10" />
+        <span>Cached</span>
+      </div>
     </div>
 
     <p class="description">{{ skill.description }}</p>
@@ -152,6 +196,16 @@ const handleOpenInAgent = async (agent: string) => {
       </div>
 
       <div class="action-btns">
+        <!-- Clear Cache button -->
+        <button
+          v-if="isCached"
+          class="icon-btn secondary"
+          title="Clear download cache"
+          @click="handleClearCache"
+        >
+          <RefreshCw :size="16" />
+        </button>
+
         <!-- Edit button for local skills -->
         <button
           v-if="isLocalSkill"
@@ -200,15 +254,31 @@ const handleOpenInAgent = async (agent: string) => {
           <PlusCircle :size="16" />
           <span>Update</span>
         </button>
+
+        <!-- Supplemental Install Button -->
+        <button
+          v-if="isInstalled && canInstallMore"
+          class="install-btn secondary"
+          title="Install to other agents"
+          @click="emit('install', skill)"
+        >
+          <PlusCircle :size="16" />
+          <span>Add</span>
+        </button>
+
         <button
           v-if="isInstalled"
           class="uninstall-btn"
           @click="emit('uninstall', skill.name)"
         >
           <Trash2 :size="16" />
-          <span>Uninstall</span>
         </button>
-        <button v-else class="install-btn" @click="emit('install', skill)">
+
+        <button
+          v-if="!isInstalled"
+          class="install-btn"
+          @click="emit('install', skill)"
+        >
           <Download :size="16" />
           <span>Install</span>
         </button>
@@ -298,7 +368,20 @@ const handleOpenInAgent = async (agent: string) => {
   color: var(--text-muted);
   background-color: var(--bg-tertiary);
   padding: 2px 8px;
+  padding: 2px 8px;
   border-radius: 4px;
+}
+
+.cached-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  background-color: rgba(99, 102, 241, 0.1);
+  color: var(--accent-primary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .description {
@@ -308,6 +391,7 @@ const handleOpenInAgent = async (agent: string) => {
   margin: 0 0 16px;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   flex: 1;

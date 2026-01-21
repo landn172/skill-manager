@@ -121,34 +121,58 @@ pub async fn install_skill(
                 },
             );
 
-            // Clone the repo to a temp directory
-            let cache_dir = dirs::cache_dir()
-                .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-                .join("gemini-skills-cache")
-                .join("downloads")
-                .join(&skill.name);
-
-            // Remove old cache if exists
-            let _ = fs::remove_dir_all(&cache_dir).await;
-
             let parsed = parse_source(&repo);
-            println!("Installing remote skill {} from {}", skill.name, parsed.url);
 
-            if let Err(e) = clone_repo(&parsed.url, &cache_dir).await {
-                let err_msg = format!("Failed to download skill from {}: {}", parsed.url, e);
+            // Check if we have valid cache
+            use crate::utils::cache;
+            let cache_dir = cache::get_skill_cache_dir(&skill.name);
+
+            let should_download = !cache::is_cache_valid(&skill.name).await;
+
+            if !should_download {
                 let _ = app.emit(
                     "install-progress",
                     ProgressEvent {
                         skill: skill.name.clone(),
-                        status: "error".to_string(),
-                        message: err_msg.clone(),
+                        status: "downloading".to_string(),
+                        message: "Using cached download...".to_string(),
                         agent: None,
                     },
                 );
-                return Err(err_msg);
+
+                // Remove old cache if exists (only when downloading fresh)
+                let _ = fs::remove_dir_all(&cache_dir).await;
+
+                println!("Installing remote skill {} from {}", skill.name, parsed.url);
+
+                if let Err(e) = clone_repo(&parsed.url, &cache_dir).await {
+                    let err_msg = format!("Failed to download skill from {}: {}", parsed.url, e);
+                    let _ = app.emit(
+                        "install-progress",
+                        ProgressEvent {
+                            skill: skill.name.clone(),
+                            status: "error".to_string(),
+                            message: err_msg.clone(),
+                            agent: None,
+                        },
+                    );
+                    return Err(err_msg);
+                }
+
+                // Write cache metadata
+                let _ = cache::write_cache_metadata(&skill.name, &repo).await;
+            } else {
+                let _ = app.emit(
+                    "install-progress",
+                    ProgressEvent {
+                        skill: skill.name.clone(),
+                        status: "downloading".to_string(),
+                        message: "Using cached download...".to_string(),
+                        agent: None,
+                    },
+                );
             }
 
-            // If there's a subpath in the repo, use that
             if let Some(subpath) = parsed.subpath {
                 cache_dir.join(subpath)
             } else {
@@ -165,6 +189,39 @@ pub async fn install_skill(
         // Local path
         std::path::PathBuf::from(&skill.path)
     };
+
+    // Verify source path exists, if not try to find it (auto-discovery)
+    let source_path = if !source_path.exists() && is_remote {
+        println!("Source path {:?} does not exist, searching...", source_path);
+        // Try to find SKILL.md or README.md in the cache directory
+        use walkdir::WalkDir;
+        let cache_base = crate::utils::cache::get_skill_cache_dir(&skill.name);
+
+        if cache_base.exists() {
+            let found = WalkDir::new(&cache_base)
+                .max_depth(5)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .find(|e| {
+                    let fname = e.file_name().to_string_lossy();
+                    fname == "SKILL.md" || fname == "README.md"
+                });
+
+            if let Some(entry) = found {
+                println!("Found alternative source: {:?}", entry.path().parent());
+                entry.path().parent().unwrap().to_path_buf()
+            } else {
+                source_path
+            }
+        } else {
+            source_path
+        }
+    } else {
+        source_path
+    };
+
+    // Keep track of the first installation path to use as source for hard links
+    let mut primary_install_path: Option<std::path::PathBuf> = None;
 
     for (i, agent_type) in agents.iter().enumerate() {
         // Simple debug string for now, or use display trait if available
@@ -199,10 +256,24 @@ pub async fn install_skill(
 
         let target_dir = target_base.join(&skill.name);
 
-        match copy_dir_recursive(&source_path, &target_dir).await {
+        // Determine source for this installation
+        // If we have a primary installation and we're not on the first one, try to link from it
+        let install_result = if let Some(ref primary_src) = primary_install_path {
+            use crate::utils::fs::link_dir_recursive;
+            link_dir_recursive(primary_src, &target_dir).await
+        } else {
+            copy_dir_recursive(&source_path, &target_dir).await
+        };
+
+        match install_result {
             Ok(_) => {
                 // Remove quarantine on macOS to avoid permissions issues
                 let _ = remove_quarantine(&target_dir).await;
+
+                // Set this as primary if not set yet
+                if primary_install_path.is_none() {
+                    primary_install_path = Some(target_dir.clone());
+                }
 
                 results.push(InstallResult {
                     success: true,

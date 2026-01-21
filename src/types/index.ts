@@ -92,3 +92,9 @@ export interface Project {
   path: string
   created_at?: string
 }
+
+export interface CacheMetadata {
+  skill_name: string
+  source_url: string
+  downloaded_at: string
+}

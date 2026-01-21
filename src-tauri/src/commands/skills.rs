@@ -26,8 +26,11 @@ async fn parse_skill_md(path: &Path) -> Option<Skill> {
 
     // Very basic frontmatter parser using regex
     let re_fm = Regex::new(r"(?s)^---\s*(.*?)\s*---").unwrap();
-    let caps = re_fm.captures(&content)?;
-    let fm_content = caps.get(1)?.as_str();
+    let fm_content = if let Some(caps) = re_fm.captures(&content) {
+        caps.get(1).map(|m| m.as_str()).unwrap_or("")
+    } else {
+        ""
+    };
 
     let re_name = Regex::new(r"name:\s*(.+)").unwrap();
     let re_desc = Regex::new(r"description:\s*(.+)").unwrap();
@@ -58,7 +61,11 @@ async fn parse_skill_md(path: &Path) -> Option<Skill> {
         .captures(fm_content)
         .and_then(|c| c.get(1))
         .map(|m| m.as_str().trim().trim_matches('\'').to_string())
-        .unwrap_or_else(|| "No description".to_string());
+        .unwrap_or_else(|| {
+            // If no description in frontmatter, maybe use the first line of content?
+            // For now just "No description" or maybe the filename
+            "No description".to_string()
+        });
 
     let version = re_ver.captures(fm_content).and_then(|c| c.get(1)).map(|m| {
         m.as_str()
@@ -149,33 +156,36 @@ pub async fn list_installed_skills(
                 if let Ok(ty) = entry.file_type().await {
                     if ty.is_dir() {
                         let skill_dir = entry.path();
-                        if let Some(skill) = parse_skill_md(&skill_dir.join("SKILL.md")).await {
-                            let name = skill.name.clone();
-                            let agent_key = serde_json::to_string(&agent.agent_type)
-                                .unwrap()
-                                .replace("\"", "");
-                            let skill_path = skill.path.clone();
+                        // Use get_skill_file to check for either SKILL.md or README.md
+                        if let Some(skill_file) = get_skill_file(&skill_dir).await {
+                            if let Some(skill) = parse_skill_md(&skill_file).await {
+                                let name = skill.name.clone();
+                                let agent_key = serde_json::to_string(&agent.agent_type)
+                                    .unwrap()
+                                    .replace("\"", "");
+                                let skill_path = skill.path.clone();
 
-                            if let Some(existing) = skill_map.get_mut(&name) {
-                                existing.agents.push(agent.agent_type.clone());
-                                existing.agent_paths.insert(agent_key, skill_path);
-                            } else {
-                                let mut agent_paths = std::collections::HashMap::new();
-                                agent_paths.insert(agent_key, skill_path);
+                                if let Some(existing) = skill_map.get_mut(&name) {
+                                    existing.agents.push(agent.agent_type.clone());
+                                    existing.agent_paths.insert(agent_key, skill_path);
+                                } else {
+                                    let mut agent_paths = std::collections::HashMap::new();
+                                    agent_paths.insert(agent_key, skill_path);
 
-                                skill_map.insert(
-                                    name.clone(),
-                                    InstalledSkill {
-                                        installed_version: skill.version.clone(),
-                                        skill,
-                                        install_date: "".into(),
-                                        source: "Local".into(),
-                                        source_id: "".into(),
-                                        scope: scope.clone(),
-                                        agents: vec![agent.agent_type.clone()],
-                                        agent_paths,
-                                    },
-                                );
+                                    skill_map.insert(
+                                        name.clone(),
+                                        InstalledSkill {
+                                            installed_version: skill.version.clone(),
+                                            skill,
+                                            install_date: "".into(),
+                                            source: "Local".into(),
+                                            source_id: "".into(),
+                                            scope: scope.clone(),
+                                            agents: vec![agent.agent_type.clone()],
+                                            agent_paths,
+                                        },
+                                    );
+                                }
                             }
                         }
                     }

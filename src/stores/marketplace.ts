@@ -20,9 +20,17 @@ export const useMarketplaceStore = defineStore('marketplace', {
       currentSource: '',
       status: '' as 'idle' | 'loading_sources' | 'fetching' | 'done',
     },
+    cachedSkills: [] as import('@/types').CacheMetadata[],
   }),
 
   getters: {
+    isSkillCached: (state) => (skillName: string) => {
+      return state.cachedSkills.some((s) => s.skill_name === skillName)
+    },
+    getCachedAt: (state) => (skillName: string) => {
+      return state.cachedSkills.find((s) => s.skill_name === skillName)
+        ?.downloaded_at
+    },
     availableTags(state): string[] {
       const tagSet = new Set<string>()
       state.skills.forEach((skill) => {
@@ -390,6 +398,34 @@ export const useMarketplaceStore = defineStore('marketplace', {
         })
       } catch (e) {
         console.error('Failed to toggle source:', e)
+        throw e
+      }
+    },
+
+    async fetchCachedSkills() {
+      try {
+        this.cachedSkills = await invoke('get_cached_skills')
+      } catch (e) {
+        console.error('Failed to fetch cached skills:', e)
+      }
+    },
+
+    async clearCache(skillName: string) {
+      try {
+        await invoke('clear_skill_cache', { skillName })
+        await this.fetchCachedSkills()
+      } catch (e) {
+        console.error('Failed to clear cache:', e)
+        throw e
+      }
+    },
+
+    async clearAllCache() {
+      try {
+        await invoke('clear_all_cache')
+        await this.fetchCachedSkills()
+      } catch (e) {
+        console.error('Failed to clear all cache:', e)
         throw e
       }
     },

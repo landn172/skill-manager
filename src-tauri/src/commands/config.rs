@@ -1,7 +1,7 @@
+use crate::models::config::AppConfig;
 use crate::models::marketplace::MarketplaceSource;
+use crate::utils::git::parse_source;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use tauri::State;
 
 #[derive(Serialize, Deserialize)]
 pub struct AppConfigExport {
@@ -11,9 +11,10 @@ pub struct AppConfigExport {
 }
 
 #[tauri::command]
-pub async fn export_config(app: tauri::AppHandle) -> Result<String, String> {
+pub async fn export_config(_app: tauri::AppHandle) -> Result<String, String> {
     // 1. Fetch Marketplace Sources
-    let mut sources = crate::commands::marketplace::get_marketplace_sources().await?;
+    // For now just export sources
+    // let mut sources = crate::commands::marketplace::get_marketplace_sources().await?;
 
     // 2. Fetch Source States (enabled/disabled) - actually get_marketplace_sources handles this already!
     // But we might want the raw custom sources to avoid re-exporting default ones if we want a clean import.
@@ -42,7 +43,7 @@ pub async fn export_config(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn import_config(json: String, app: tauri::AppHandle) -> Result<(), String> {
+pub async fn import_config(json: String, _app: tauri::AppHandle) -> Result<(), String> {
     let config: AppConfigExport =
         serde_json::from_str(&json).map_err(|e| format!("Invalid JSON: {}", e))?;
 
