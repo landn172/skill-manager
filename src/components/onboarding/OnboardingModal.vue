@@ -89,7 +89,10 @@ const installedAgentsCount = computed(
             class="agent-card"
             :class="{ installed: agent.installed }"
           >
-            <AgentIcon :type="agent.agent_type" :size="32" />
+            <AgentIcon
+              :type="agentsStore.getIcon(agent.agent_type)"
+              :size="32"
+            />
             <div class="agent-info">
               <span class="agent-name">{{ agent.display_name }}</span>
               <span class="agent-status">

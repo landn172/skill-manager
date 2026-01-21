@@ -1,4 +1,4 @@
-use crate::models::agent::{AgentConfig, AgentType};
+use crate::models::agent::AgentType;
 use crate::models::skill::{InstallScope, Skill};
 use crate::utils::db::log_action;
 use crate::utils::fs::{copy_dir_recursive, remove_quarantine};
@@ -31,7 +31,7 @@ pub async fn install_skill(
     use tauri::Emitter;
 
     let mut results = Vec::new();
-    let all_agent_configs = AgentConfig::all();
+    let all_agent_configs = crate::commands::agents::get_all_agents_impl().await;
     let total_agents = agents.len();
 
     // Check if we have a repo in metadata (from SkillsMP)
@@ -167,7 +167,10 @@ pub async fn install_skill(
     };
 
     for (i, agent_type) in agents.iter().enumerate() {
-        let agent_name = format!("{:?}", agent_type); // Simple debug string for now, or use display trait if available
+        // Simple debug string for now, or use display trait if available
+        let agent_name = serde_json::to_string(&agent_type)
+            .unwrap_or_else(|_| "unknown".to_string())
+            .replace("\"", "");
 
         let _ = app.emit(
             "install-progress",
@@ -182,7 +185,7 @@ pub async fn install_skill(
         let agent_config = all_agent_configs
             .iter()
             .find(|a| &a.agent_type == agent_type)
-            .unwrap();
+            .ok_or_else(|| format!("Agent configuration not found for {:?}", agent_type))?;
 
         let target_base = match scope {
             InstallScope::Global => agent_config.global_skills_dir.clone(),
@@ -247,11 +250,11 @@ pub async fn uninstall_skill(
     agent: AgentType,
     scope: InstallScope,
 ) -> Result<(), String> {
-    let all_agent_configs = AgentConfig::all();
+    let all_agent_configs = crate::commands::agents::get_all_agents_impl().await;
     let agent_config = all_agent_configs
         .iter()
         .find(|a| a.agent_type == agent)
-        .unwrap();
+        .ok_or_else(|| "Agent not found".to_string())?;
 
     let target_base = match scope {
         InstallScope::Global => agent_config.global_skills_dir.clone(),
@@ -285,11 +288,11 @@ pub async fn is_skill_installed(
     agent: AgentType,
     scope: InstallScope,
 ) -> Result<bool, String> {
-    let all_agent_configs = AgentConfig::all();
+    let all_agent_configs = crate::commands::agents::get_all_agents_impl().await;
     let agent_config = all_agent_configs
         .iter()
         .find(|a| a.agent_type == agent)
-        .unwrap();
+        .ok_or_else(|| "Agent not found".to_string())?;
 
     let target_base = match scope {
         InstallScope::Global => agent_config.global_skills_dir.clone(),

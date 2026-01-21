@@ -18,6 +18,7 @@ import {
   Palette,
   Download,
   Upload,
+  Edit2,
 } from 'lucide-vue-next'
 import { useThemeStore } from '@/stores/theme'
 import AgentIcon from '@/components/icons/AgentIcon.vue'
@@ -25,7 +26,7 @@ import { useProjectStore } from '@/stores/project'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { homeDir } from '@tauri-apps/api/path'
 import { invoke } from '@tauri-apps/api/core'
-import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs'
+import { writeTextFile, readTextFile, readFile } from '@tauri-apps/plugin-fs'
 
 const agentsStore = useAgentsStore()
 const marketplaceStore = useMarketplaceStore()
@@ -241,6 +242,138 @@ async function handleImportConfig() {
     alert(`Failed to import config: ${e}`)
   }
 }
+
+// Agent Path Management
+const editingAgent = ref<any>(null)
+const editAgentPath = ref('')
+const savingAgentPath = ref(false)
+
+function openEditAgent(agent: any) {
+  editingAgent.value = agent
+  editAgentPath.value = agent.global_skills_dir
+}
+
+async function saveAgentPath() {
+  if (!editingAgent.value) return
+
+  savingAgentPath.value = true
+  try {
+    await invoke('update_agent_path', {
+      agentType: editingAgent.value.agent_type,
+      path: editAgentPath.value,
+    })
+
+    // Refresh agents
+    await agentsStore.fetchAgents()
+    editingAgent.value = null
+    editAgentPath.value = ''
+    alert('Agent path updated!')
+  } catch (e) {
+    alert(`Failed to update agent path: ${e}`)
+  } finally {
+    savingAgentPath.value = false
+  }
+}
+
+async function browseForAgentPath() {
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      defaultPath: await homeDir(),
+    })
+
+    if (selected && typeof selected === 'string') {
+      editAgentPath.value = selected
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+// Custom Agent Management
+const showAddAgentModal = ref(false)
+const newAgentName = ref('')
+const newAgentPath = ref('')
+const newAgentIconType = ref<'emoji' | 'image'>('emoji')
+const newAgentIcon = ref('🚀')
+const addingAgent = ref(false)
+
+async function pickIconImage() {
+  try {
+    const selected = await open({
+      multiple: false,
+      filters: [
+        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'svg', 'webp'] },
+      ],
+    })
+    if (selected && typeof selected === 'string') {
+      const data = await readFile(selected)
+      const blob = new Blob([data])
+      const reader = new FileReader()
+      reader.onload = () => {
+        newAgentIcon.value = reader.result as string
+      }
+      reader.readAsDataURL(blob)
+    }
+  } catch (e) {
+    console.error('Failed to pick icon image', e)
+  }
+}
+
+async function addCustomAgent() {
+  if (!newAgentName.value || !newAgentPath.value) return
+
+  addingAgent.value = true
+  try {
+    await invoke('add_custom_agent', {
+      name: newAgentName.value,
+      path: newAgentPath.value,
+      icon: newAgentIcon.value,
+    })
+
+    await agentsStore.fetchAgents()
+    showAddAgentModal.value = false
+    newAgentName.value = ''
+    newAgentPath.value = ''
+    newAgentIcon.value = '🚀'
+    newAgentIconType.value = 'emoji'
+    alert('Custom agent added!')
+  } catch (e) {
+    alert(`Failed to add agent: ${e}`)
+  } finally {
+    addingAgent.value = false
+  }
+}
+
+async function removeCustomAgent(agent: any) {
+  if (!confirm(`Remove custom agent "${agent.display_name}"?`)) return
+
+  try {
+    await invoke('remove_custom_agent', {
+      agentType: agent.agent_type,
+    })
+    await agentsStore.fetchAgents()
+  } catch (e) {
+    alert(`Failed to remove agent: ${e}`)
+  }
+}
+
+async function browseForNewAgentPath() {
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      defaultPath: await homeDir(),
+    })
+
+    if (selected && typeof selected === 'string') {
+      newAgentPath.value = selected
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
 </script>
 
 <template>
@@ -353,7 +486,10 @@ async function handleImportConfig() {
           >
             <div class="agent-info">
               <div class="agent-icon-wrap">
-                <AgentIcon :type="agent.agent_type" :size="24" />
+                <AgentIcon
+                  :type="agentsStore.getIcon(agent.agent_type)"
+                  :size="24"
+                />
               </div>
               <div class="agent-details">
                 <span class="agent-name">{{ agent.display_name }}</span>
@@ -370,9 +506,148 @@ async function handleImportConfig() {
                 <span>Not Found</span>
               </template>
             </div>
+            <!-- Add Edit Button -->
+            <button
+              class="icon-btn edit-agent"
+              @click="openEditAgent(agent)"
+              title="Edit Path"
+            >
+              <Edit2 :size="16" />
+            </button>
+            <button
+              v-if="agent.is_custom"
+              class="icon-btn delete-agent"
+              @click="removeCustomAgent(agent)"
+              title="Remove Agent"
+            >
+              <Trash2 :size="16" />
+            </button>
           </div>
         </div>
+
+        <div class="agents-actions">
+          <button class="add-btn" @click="showAddAgentModal = true">
+            <Plus :size="18" />
+            <span>Add Custom Agent</span>
+          </button>
+        </div>
       </section>
+
+      <!-- Add Agent Modal -->
+      <div v-if="showAddAgentModal" class="modal-overlay">
+        <div class="modal-content">
+          <h3>Add Custom Agent</h3>
+          <p>Add a new IDE or tool to the list.</p>
+
+          <div class="form-group">
+            <label>Agent Name</label>
+            <input
+              v-model="newAgentName"
+              placeholder="e.g. My IDE"
+              class="input-field"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Icon</label>
+            <div class="icon-selector-wrap">
+              <div class="icon-type-toggle">
+                <button
+                  class="toggle-btn"
+                  :class="{ active: newAgentIconType === 'emoji' }"
+                  @click="newAgentIconType = 'emoji'"
+                >
+                  Emoji
+                </button>
+                <button
+                  class="toggle-btn"
+                  :class="{ active: newAgentIconType === 'image' }"
+                  @click="newAgentIconType = 'image'"
+                >
+                  Image
+                </button>
+              </div>
+
+              <div class="icon-input-row">
+                <div class="icon-preview">
+                  <AgentIcon :type="newAgentIcon" :size="32" />
+                </div>
+                <template v-if="newAgentIconType === 'emoji'">
+                  <input
+                    v-model="newAgentIcon"
+                    placeholder="Emoji (e.g. 🚀)"
+                    class="input-field icon-input"
+                    maxlength="8"
+                  />
+                </template>
+                <template v-else>
+                  <button class="btn-secondary" @click="pickIconImage">
+                    {{
+                      newAgentIcon.startsWith('data:')
+                        ? 'Change Image'
+                        : 'Select Image'
+                    }}
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Skills Directory Path</label>
+            <div class="input-row">
+              <input v-model="newAgentPath" class="input-field" />
+              <button class="btn-secondary" @click="browseForNewAgentPath">
+                Browse
+              </button>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-secondary" @click="showAddAgentModal = false">
+              Cancel
+            </button>
+            <button
+              class="btn-primary"
+              :disabled="!newAgentName || !newAgentPath || addingAgent"
+              @click="addCustomAgent"
+            >
+              {{ addingAgent ? 'Adding...' : 'Add Agent' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Agent Modal -->
+      <div v-if="editingAgent" class="modal-overlay">
+        <div class="modal-content">
+          <h3>Edit {{ editingAgent.display_name }} Path</h3>
+          <p>Manually set the skills directory for this agent.</p>
+
+          <div class="form-group">
+            <label>Skills Directory Path</label>
+            <div class="input-row">
+              <input v-model="editAgentPath" class="input-field" />
+              <button class="btn-secondary" @click="browseForAgentPath">
+                Browse
+              </button>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-secondary" @click="editingAgent = null">
+              Cancel
+            </button>
+            <button
+              class="btn-primary"
+              :disabled="savingAgentPath"
+              @click="saveAgentPath"
+            >
+              {{ savingAgentPath ? 'Saving...' : 'Save Path' }}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <section class="settings-section">
         <div class="section-header">
@@ -1088,5 +1363,102 @@ input:checked + .slider:before {
 .cache-hint {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.edit-agent {
+  opacity: 0;
+  transition: opacity 0.2s;
+  margin-left: 12px;
+}
+
+.agent-card:hover .edit-agent {
+  opacity: 1;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.delete-agent {
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: var(--text-muted);
+}
+
+.delete-agent:hover {
+  color: var(--accent-error);
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.agent-card:hover .delete-agent {
+  opacity: 1;
+}
+
+.agents-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+/* Icon Selector Styles */
+.icon-selector-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--bg-tertiary);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.icon-type-toggle {
+  display: flex;
+  gap: 4px;
+  background-color: var(--bg-secondary);
+  padding: 4px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.toggle-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.toggle-btn.active {
+  background-color: var(--bg-tertiary);
+  color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-preview {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.icon-input {
+  flex: 1;
 }
 </style>

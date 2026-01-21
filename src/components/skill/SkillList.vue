@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { Pencil, Trash2 } from 'lucide-vue-next'
-import type { InstalledSkill, AgentType } from '@/types'
+import { invoke } from '@tauri-apps/api/core'
+import type { InstalledSkill } from '@/types'
+import AgentIcon from '@/components/icons/AgentIcon.vue'
+import { useAgentsStore } from '@/stores/agents'
+
+const agentsStore = useAgentsStore()
 
 defineProps<{
   skills: InstalledSkill[]
@@ -11,20 +16,13 @@ const emit = defineEmits<{
   (e: 'uninstall', skill: InstalledSkill): void
 }>()
 
-function getAgentIcon(type: AgentType) {
-  switch (type) {
-    case 'gemini':
-      return '✨'
-    case 'opencode':
-      return '💻'
-    case 'claude-code':
-      return '🤖'
-    case 'cursor':
-      return '🖱️'
-    case 'codex':
-      return '📄'
-    default:
-      return '❓'
+const handleOpenInAgent = async (skill: InstalledSkill, agent: string) => {
+  const path = skill.agent_paths?.[agent] || skill.path
+  if (!path) return
+  try {
+    await invoke('open_in_agent', { path, agent })
+  } catch (e) {
+    alert(`Failed to open in agent: ${e}`)
   }
 }
 </script>
@@ -37,14 +35,15 @@ function getAgentIcon(type: AgentType) {
         <p class="skill-desc">{{ skill.description }}</p>
 
         <div class="installed-agents">
-          <span
+          <div
             v-for="agent in skill.agents"
             :key="agent"
-            class="agent-tag"
-            :title="agent"
+            class="agent-badge clickable"
+            :title="`Open in ${agent}`"
+            @click.stop="handleOpenInAgent(skill, agent)"
           >
-            {{ getAgentIcon(agent) }}
-          </span>
+            <AgentIcon :type="agentsStore.getIcon(agent)" :size="16" />
+          </div>
         </div>
       </div>
 
@@ -115,15 +114,26 @@ function getAgentIcon(type: AgentType) {
   gap: 6px;
 }
 
-.agent-tag {
-  width: 28px;
-  height: 28px;
+.agent-badge {
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: var(--bg-tertiary);
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  padding: 4px;
+  color: var(--text-secondary);
+}
+
+.agent-badge.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.agent-badge.clickable:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 .skill-actions {

@@ -5,6 +5,7 @@ export type AgentType =
   | 'cursor'
   | 'gemini'
   | 'vscode'
+  | string // Allow custom agent names
 
 export interface AgentConfig {
   agent_type: AgentType
@@ -14,6 +15,7 @@ export interface AgentConfig {
   global_skills_dir: string
   icon: string
   installed: boolean
+  is_custom?: boolean
 }
 
 export interface Skill {
@@ -30,6 +32,7 @@ export interface InstalledSkill extends Skill {
   source_id: string
   scope: 'project' | 'global'
   agents: AgentType[]
+  agent_paths: Record<string, string>
   installed_version?: string
 }
 

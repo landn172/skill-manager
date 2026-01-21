@@ -10,16 +10,51 @@ const iconSize = computed(() => {
   const s = props.size || 24
   return typeof s === 'number' ? `${s}px` : s
 })
+const isImage = computed(() => {
+  return (
+    props.type.startsWith('data:image/') ||
+    props.type.startsWith('http') ||
+    props.type.includes('/') ||
+    props.type.includes('\\')
+  )
+})
+
+const isEmoji = computed(() => {
+  if (isImage.value) return false
+  // Basic emoji check: single character or short string that doesn't match known types
+  const knownTypes = [
+    'vscode',
+    'cursor',
+    'gemini',
+    'claude-code',
+    'codex',
+    'opencode',
+  ]
+  return !knownTypes.includes(props.type) && props.type.length <= 8
+})
 </script>
 
 <template>
+  <div v-if="isImage" class="agent-icon-image">
+    <img :src="type" :style="{ width: iconSize, height: iconSize }" alt="" />
+  </div>
+
+  <div
+    v-else-if="isEmoji"
+    class="agent-icon-emoji"
+    :style="{ fontSize: iconSize }"
+  >
+    {{ type }}
+  </div>
+
   <svg
-    v-if="type === 'vscode'"
+    v-else-if="type === 'vscode'"
     :width="iconSize"
     :height="iconSize"
     viewBox="0 0 256 254"
     xmlns="http://www.w3.org/2000/svg"
   >
+    <!-- VS Code paths -->
     <defs>
       <linearGradient id="vscode_grad" x1="50%" x2="50%" y1="0%" y2="100%">
         <stop offset="0%" stop-color="#FFF" />
@@ -48,11 +83,13 @@ const iconSize = computed(() => {
     fill="currentColor"
     xmlns="http://www.w3.org/2000/svg"
   >
+    <!-- Cursor paths -->
     <path
       d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"
     />
   </svg>
 
+  <!-- other icons... -->
   <svg
     v-else-if="type === 'gemini'"
     :width="iconSize"
@@ -107,3 +144,21 @@ const iconSize = computed(() => {
     />
   </svg>
 </template>
+
+<style scoped>
+.agent-icon-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.agent-icon-image img {
+  object-fit: contain;
+  border-radius: 4px;
+}
+.agent-icon-emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+</style>

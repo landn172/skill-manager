@@ -11,7 +11,11 @@ import {
 import { invoke } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import type { MarketplaceSkill, Skill } from '@/types'
+import AgentIcon from '@/components/icons/AgentIcon.vue'
 import { useSkillsStore } from '@/stores/skills'
+import { useAgentsStore } from '@/stores/agents'
+
+const agentsStore = useAgentsStore()
 
 const props = defineProps<{
   skill: MarketplaceSkill | Skill
@@ -32,6 +36,8 @@ const installedSkill = computed(() =>
   skillsStore.getSkillByName(props.skill.name),
 )
 const installedVersion = computed(() => installedSkill.value?.installed_version)
+
+const installedAgents = computed(() => installedSkill.value?.agents || [])
 
 const hasUpdate = computed(() => {
   if (!isInstalled.value || !props.skill.version || !installedVersion.value)
@@ -57,12 +63,6 @@ const isLocalSkill = computed(() => {
   const result =
     skill.source_id?.startsWith('custom_') ||
     skill.source_name?.toLowerCase() === 'local'
-  console.log('isLocalSkill check:', {
-    name: skill.name,
-    source_id: skill.source_id,
-    source_name: skill.source_name,
-    result,
-  })
   return result
 })
 
@@ -92,6 +92,20 @@ const handleOpenExternal = async () => {
     }
   }
 }
+
+// Open skill in specific agent
+const handleOpenInAgent = async (agent: string) => {
+  // Use the specific path for this agent if available, fallback to default path
+  const path =
+    installedSkill.value?.agent_paths?.[agent] || installedSkill.value?.path
+  if (!path) return
+
+  try {
+    await invoke('open_in_agent', { path, agent })
+  } catch (e) {
+    alert(`Failed to open in agent: ${e}`)
+  }
+}
 </script>
 
 <template>
@@ -102,7 +116,23 @@ const handleOpenExternal = async () => {
         <span v-if="skill.version" class="version-badge"
           >v{{ skill.version }}</span
         >
+        <!-- Installed Agent Icons -->
+        <div
+          v-if="isInstalled && installedAgents.length > 0"
+          class="installed-agents"
+        >
+          <div
+            v-for="agent in installedAgents"
+            :key="agent"
+            class="agent-badge clickable"
+            :title="`Open in ${agent}`"
+            @click.stop="handleOpenInAgent(agent)"
+          >
+            <AgentIcon :type="agentsStore.getIcon(agent)" :size="14" />
+          </div>
+        </div>
       </div>
+
       <div v-if="showSource" class="source">
         {{ (skill as MarketplaceSkill).source_name }}
       </div>
@@ -228,6 +258,34 @@ const handleOpenExternal = async () => {
   border: 1px solid var(--border-color);
 }
 
+.installed-agents {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.agent-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.agent-badge.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.agent-badge.clickable:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
 .name {
   margin: 0;
   font-size: 16px;
@@ -264,6 +322,8 @@ const handleOpenExternal = async () => {
 .tags {
   display: flex;
   gap: 8px;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, black 90%, transparent 100%);
 }
 
 .tag {
@@ -272,6 +332,7 @@ const handleOpenExternal = async () => {
   background-color: rgba(99, 102, 241, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
+  white-space: nowrap;
 }
 
 .install-btn {

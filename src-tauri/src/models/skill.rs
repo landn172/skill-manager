@@ -28,5 +28,6 @@ pub struct InstalledSkill {
     pub source_id: String,
     pub scope: InstallScope,
     pub agents: Vec<AgentType>,
+    pub agent_paths: HashMap<String, String>,
     pub installed_version: Option<String>,
 }

@@ -1,4 +1,3 @@
-use crate::models::agent::AgentConfig;
 use crate::models::skill::{InstallScope, InstalledSkill, Skill};
 use regex::Regex;
 use std::collections::HashMap;
@@ -125,7 +124,7 @@ pub async fn list_installed_skills(
     scope: InstallScope,
     project_path: Option<String>,
 ) -> Result<Vec<InstalledSkill>, String> {
-    let agents = AgentConfig::all();
+    let agents = crate::commands::agents::get_all_agents_impl().await;
     let mut skill_map: std::collections::HashMap<String, InstalledSkill> =
         std::collections::HashMap::new();
 
@@ -152,9 +151,18 @@ pub async fn list_installed_skills(
                         let skill_dir = entry.path();
                         if let Some(skill) = parse_skill_md(&skill_dir.join("SKILL.md")).await {
                             let name = skill.name.clone();
+                            let agent_key = serde_json::to_string(&agent.agent_type)
+                                .unwrap()
+                                .replace("\"", "");
+                            let skill_path = skill.path.clone();
+
                             if let Some(existing) = skill_map.get_mut(&name) {
                                 existing.agents.push(agent.agent_type.clone());
+                                existing.agent_paths.insert(agent_key, skill_path);
                             } else {
+                                let mut agent_paths = std::collections::HashMap::new();
+                                agent_paths.insert(agent_key, skill_path);
+
                                 skill_map.insert(
                                     name.clone(),
                                     InstalledSkill {
@@ -165,6 +173,7 @@ pub async fn list_installed_skills(
                                         source_id: "".into(),
                                         scope: scope.clone(),
                                         agents: vec![agent.agent_type.clone()],
+                                        agent_paths,
                                     },
                                 );
                             }

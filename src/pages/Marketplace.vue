@@ -509,7 +509,7 @@ async function submitEditSkill() {
               "
             >
               <AgentIcon
-                :type="agent.agent_type"
+                :type="agentsStore.getIcon(agent.agent_type)"
                 :size="18"
                 class="agent-icon"
               />

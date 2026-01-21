@@ -32,6 +32,10 @@ pub fn run() {
             // Agents
             detect_agents,
             get_agent_config,
+            update_agent_path,
+            add_custom_agent,
+            remove_custom_agent,
+            open_in_agent,
             // Skills
             discover_skills,
             get_skill_content,
