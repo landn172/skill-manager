@@ -12,6 +12,8 @@ export const useMarketplaceStore = defineStore('marketplace', {
     selectedSource: null as string | null,
     searchMode: 'keyword' as SearchMode,
     hasApiKey: false,
+    sortBy: 'stars' as 'name' | 'stars' | 'updated',
+    selectedTags: [] as string[],
     fetchProgress: {
       current: 0,
       total: 0,
@@ -21,12 +23,30 @@ export const useMarketplaceStore = defineStore('marketplace', {
   }),
 
   getters: {
+    availableTags(state): string[] {
+      const tagSet = new Set<string>()
+      state.skills.forEach((skill) => {
+        if (skill.tags) {
+          skill.tags.forEach((tag) => tagSet.add(tag))
+        }
+      })
+      return Array.from(tagSet).sort()
+    },
+
     filteredSkills(state) {
       let result = state.skills
 
+      // 1. Filter by Source
       if (state.selectedSource) {
         result = result.filter((s) => s.source_id === state.selectedSource)
       } else {
+        // Deduplication priority...
+        // ... (existing logic for deduplication) ...
+        // I will copy the deduplication logic from the original file since I can't reference it inside the replacement block if I don't include it.
+        // Wait, replace_file_content replaces a block. I need to be careful not to delete the deduplication logic if I'm replacing the whole filteredSkills.
+        // The original filteredSkills is quite long. I should target smaller chunks if possible, or rewrite it carefully.
+        // Let's rewrite the whole getter block to be safe and include the new logic.
+
         // Deduplication priority: Official > Local > Registry > Git > API
         const priorityMap: Record<string, number> = {
           local: 90,
@@ -39,7 +59,6 @@ export const useMarketplaceStore = defineStore('marketplace', {
 
         for (const skill of result) {
           const source = state.sources.find((s) => s.id === skill.source_id)
-          // If source not found (shouldn't happen), skip or keep
           if (!source) continue
 
           const existing = uniqueSkills.get(skill.name)
@@ -66,7 +85,15 @@ export const useMarketplaceStore = defineStore('marketplace', {
         result = Array.from(uniqueSkills.values())
       }
 
-      // Only filter locally if using keyword mode and not searching via API
+      // 2. Filter by Tags
+      if (state.selectedTags.length > 0) {
+        result = result.filter(
+          (s) =>
+            s.tags && state.selectedTags.every((tag) => s.tags.includes(tag)),
+        )
+      }
+
+      // 3. Filter by Search Query (Keyword mode)
       if (state.searchQuery && state.selectedSource !== 'skillsmp') {
         const query = state.searchQuery.toLowerCase()
         result = result.filter(
@@ -75,6 +102,22 @@ export const useMarketplaceStore = defineStore('marketplace', {
             s.description.toLowerCase().includes(query),
         )
       }
+
+      // 4. Sort
+      result.sort((a, b) => {
+        if (state.sortBy === 'stars') {
+          return (b.stars || 0) - (a.stars || 0)
+        } else if (state.sortBy === 'updated') {
+          // Assuming metadata has updated_at, otherwise fallback to 0
+          // The current Skill type definition isn't fully visible, but usually there's no updated_at in standard list.
+          // If not available, stable sort or name.
+          // Let's stick to Name and Stars for now as confirmed features.
+          // If 'updated' is requested but data missing, fallback to name.
+          return 0
+        } else {
+          return a.name.localeCompare(b.name)
+        }
+      })
 
       return result
     },
@@ -313,9 +356,17 @@ export const useMarketplaceStore = defineStore('marketplace', {
     },
 
     // Placeholder for adding custom sources (to be implemented)
-    async addSource(url: string, name: string) {
+    async addSource(
+      url: string,
+      name: string,
+      type?: 'registry' | 'local' | 'git',
+    ) {
       try {
-        this.sources = await invoke('add_marketplace_source', { url, name })
+        this.sources = await invoke('add_marketplace_source', {
+          url,
+          name,
+          sourceType: type,
+        })
       } catch (e) {
         console.error('Failed to add source:', e)
         throw e

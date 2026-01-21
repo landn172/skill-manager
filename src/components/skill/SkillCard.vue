@@ -6,6 +6,7 @@ import {
   Folder,
   PlusCircle,
   ExternalLink,
+  Edit3,
 } from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
@@ -21,6 +22,8 @@ const emit = defineEmits<{
   (e: 'install', skill: Skill): void
   (e: 'uninstall', skillName: string): void
   (e: 'update', skill: Skill): void
+  (e: 'delete', skill: Skill): void
+  (e: 'edit', skill: Skill): void
 }>()
 
 const skillsStore = useSkillsStore()
@@ -46,6 +49,21 @@ const externalUrl = computed(() => {
     skill.metadata?.repo_url ||
     null
   )
+})
+
+// Check if this is a local skill (from a Local source)
+const isLocalSkill = computed(() => {
+  const skill = props.skill as MarketplaceSkill
+  const result =
+    skill.source_id?.startsWith('custom_') ||
+    skill.source_name?.toLowerCase() === 'local'
+  console.log('isLocalSkill check:', {
+    name: skill.name,
+    source_id: skill.source_id,
+    source_name: skill.source_name,
+    result,
+  })
+  return result
 })
 
 // Open the installed skill's directory
@@ -104,6 +122,26 @@ const handleOpenExternal = async () => {
       </div>
 
       <div class="action-btns">
+        <!-- Edit button for local skills -->
+        <button
+          v-if="isLocalSkill"
+          class="icon-btn secondary"
+          title="Edit skill"
+          @click="emit('edit', skill)"
+        >
+          <Edit3 :size="16" />
+        </button>
+
+        <!-- Delete button for local skills -->
+        <button
+          v-if="isLocalSkill"
+          class="icon-btn danger"
+          title="Delete skill"
+          @click="emit('delete', skill)"
+        >
+          <Trash2 :size="16" />
+        </button>
+
         <!-- External link button -->
         <button
           v-if="externalUrl"
@@ -308,5 +346,22 @@ const handleOpenExternal = async () => {
   background-color: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--accent-primary);
+}
+
+.icon-btn.danger {
+  padding: 6px 10px;
+  background-color: transparent;
+  color: var(--accent-error, #ef4444);
+  border: 1px solid var(--accent-error, #ef4444);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.icon-btn.danger:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
 }
 </style>

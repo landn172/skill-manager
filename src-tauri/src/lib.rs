@@ -3,6 +3,8 @@ mod models;
 mod utils;
 
 use commands::agents::*;
+use commands::authoring::{create_skill, delete_local_skill, update_local_skill};
+use commands::config::*;
 use commands::installer::*;
 use commands::marketplace::*;
 use commands::projects::*;
@@ -38,6 +40,9 @@ pub fn run() {
             install_skill,
             uninstall_skill,
             is_skill_installed,
+            create_skill,
+            delete_local_skill,
+            update_local_skill,
             // Projects
             list_projects,
             add_project,
@@ -56,6 +61,9 @@ pub fn run() {
             clear_skillsmp_api_key,
             fetch_skillsmp_skills,
             search_skillsmp_ai,
+            // Config
+            export_config,
+            import_config,
             // Utils
             open_in_explorer,
             get_install_history,

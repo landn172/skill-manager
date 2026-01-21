@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useMarketplaceStore } from '@/stores/marketplace'
 import SkillCard from '@/components/skill/SkillCard.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
@@ -12,6 +13,9 @@ import {
   Sparkles,
   Search,
   AlertCircle,
+  ArrowUpDown,
+  Tag,
+  X,
 } from 'lucide-vue-next'
 import { useAgentsStore } from '@/stores/agents'
 import { useSkillsStore } from '@/stores/skills'
@@ -22,6 +26,7 @@ import type { Skill, SearchMode } from '@/types'
 const store = useMarketplaceStore()
 const agentsStore = useAgentsStore()
 const skillsStore = useSkillsStore()
+const router = useRouter()
 
 const showInstallModal = ref(false)
 const selectedSkill = ref<Skill | null>(null)
@@ -33,6 +38,11 @@ const installLogs = ref<
   Array<{ time: string; message: string; type: 'info' | 'error' | 'success' }>
 >([])
 const searchDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+
+// Edit modal state
+const showEditModal = ref(false)
+const editingSkill = ref<Skill | null>(null)
+const editForm = ref({ name: '', description: '' })
 
 onMounted(() => {
   store.fetchSources()
@@ -239,6 +249,57 @@ async function handleUninstall(skillName: string) {
     alert(`Failed to uninstall: ${e}`)
   }
 }
+
+async function handleDeleteLocalSkill(skill: Skill) {
+  if (
+    !confirm(
+      `Are you sure you want to DELETE "${skill.name}"? This will permanently remove the skill files from disk.`,
+    )
+  )
+    return
+
+  try {
+    await invoke('delete_local_skill', { skillPath: skill.path })
+    alert('Skill deleted successfully!')
+    // Refresh marketplace to remove deleted skill
+    await store.fetchSkills(undefined, true)
+  } catch (e) {
+    alert(`Failed to delete skill: ${e}`)
+  }
+}
+
+async function handleEditLocalSkill(skill: Skill) {
+  console.log('handleEditLocalSkill called with:', skill)
+  // Navigate to Create page in edit mode
+  router.push({
+    path: '/create',
+    query: {
+      edit: 'true',
+      name: skill.name,
+      description: skill.description || '',
+      path: skill.path,
+    },
+  })
+}
+
+async function submitEditSkill() {
+  if (!editingSkill.value) return
+
+  try {
+    await invoke('update_local_skill', {
+      skillPath: editingSkill.value.path,
+      name: editForm.value.name || undefined,
+      description: editForm.value.description || undefined,
+    })
+    showEditModal.value = false
+    editingSkill.value = null
+    alert('Skill updated successfully!')
+    // Refresh marketplace to show updated metadata
+    await store.fetchSkills(undefined, true)
+  } catch (e) {
+    alert(`Failed to update skill: ${e}`)
+  }
+}
 </script>
 
 <template>
@@ -280,19 +341,78 @@ async function handleUninstall(skillName: string) {
           <span>{{ store.searchMode === 'ai' ? 'AI Search' : 'Keyword' }}</span>
         </button>
 
-        <div class="source-filter">
-          <Filter :size="16" />
-          <select v-model="store.selectedSource">
-            <option :value="null">All Sources</option>
-            <option
-              v-for="source in store.sources"
-              :key="source.id"
-              :value="source.id"
+        <div class="control-group">
+          <!-- Sort -->
+          <div class="filter-dropdown">
+            <ArrowUpDown :size="16" />
+            <select v-model="store.sortBy">
+              <option value="name">Name</option>
+              <option value="stars">Stars</option>
+            </select>
+          </div>
+
+          <!-- Tag Filter -->
+          <div class="filter-dropdown">
+            <Tag :size="16" />
+            <select
+              :value="''"
+              @change="
+                (e) => {
+                  const target = e.target as HTMLSelectElement
+                  if (
+                    target.value &&
+                    !store.selectedTags.includes(target.value)
+                  ) {
+                    store.selectedTags.push(target.value)
+                  }
+                  target.value = ''
+                }
+              "
             >
-              {{ source.name }}
-            </option>
-          </select>
+              <option value="" disabled selected>Filter by Tag</option>
+              <option
+                v-for="tag in store.availableTags"
+                :key="tag"
+                :value="tag"
+              >
+                {{ tag }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Source Filter -->
+          <div class="filter-dropdown">
+            <Filter :size="16" />
+            <select v-model="store.selectedSource">
+              <option :value="null">All Sources</option>
+              <option
+                v-for="source in store.sources"
+                :key="source.id"
+                :value="source.id"
+              >
+                {{ source.name }}
+              </option>
+            </select>
+          </div>
         </div>
+      </div>
+
+      <!-- Active Tags -->
+      <div v-if="store.selectedTags.length > 0" class="active-tags">
+        <div
+          v-for="tag in store.selectedTags"
+          :key="tag"
+          class="tag-chip"
+          @click="
+            store.selectedTags = store.selectedTags.filter((t) => t !== tag)
+          "
+        >
+          <span>{{ tag }}</span>
+          <X :size="12" />
+        </div>
+        <button class="clear-tags" @click="store.selectedTags = []">
+          Clear filters
+        </button>
       </div>
 
       <!-- API Key Warning -->
@@ -352,6 +472,8 @@ async function handleUninstall(skillName: string) {
         @install="openInstallModal"
         @update="openInstallModal"
         @uninstall="handleUninstall"
+        @delete="handleDeleteLocalSkill"
+        @edit="handleEditLocalSkill"
       />
     </div>
 
@@ -459,6 +581,37 @@ async function handleUninstall(skillName: string) {
         </button>
       </template>
     </Modal>
+
+    <!-- Edit Skill Modal -->
+    <Modal
+      :show="showEditModal"
+      :title="`Edit ${editingSkill?.name}`"
+      @close="showEditModal = false"
+    >
+      <div class="edit-form">
+        <div class="input-group">
+          <label>Skill Name</label>
+          <input v-model="editForm.name" placeholder="Skill name" />
+        </div>
+        <div class="input-group">
+          <label>Description</label>
+          <textarea
+            v-model="editForm.description"
+            placeholder="Skill description"
+            rows="4"
+          ></textarea>
+        </div>
+      </div>
+
+      <template #footer>
+        <button class="footer-btn secondary" @click="showEditModal = false">
+          Cancel
+        </button>
+        <button class="footer-btn primary" @click="submitEditSkill">
+          Save Changes
+        </button>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -516,24 +669,73 @@ h1 {
   color: var(--accent-primary);
 }
 
-.source-filter {
+.control-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-dropdown {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   padding: 0 12px;
-  height: 42px;
+  height: 40px;
+  min-width: 140px;
 }
 
 select {
   background: none;
   border: none;
   outline: none;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-primary);
-  padding-right: 8px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.active-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -16px; /* Pull closer to header */
+  margin-bottom: 8px;
+}
+
+.tag-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: var(--accent-primary);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tag-chip:hover {
+  background-color: rgba(139, 92, 246, 0.2);
+}
+
+.clear-tags {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.clear-tags:hover {
+  text-decoration: underline;
+  color: var(--text-secondary);
 }
 
 .api-warning {

@@ -9,7 +9,17 @@ use walkdir::WalkDir;
 const SKIP_DIRS: &[&str] = &["node_modules", ".git", "dist", "build", "__pycache__"];
 
 async fn has_skill_md(dir: &Path) -> bool {
-    dir.join("SKILL.md").exists()
+    dir.join("SKILL.md").exists() || dir.join("README.md").exists()
+}
+
+async fn get_skill_file(dir: &Path) -> Option<std::path::PathBuf> {
+    if dir.join("SKILL.md").exists() {
+        Some(dir.join("SKILL.md"))
+    } else if dir.join("README.md").exists() {
+        Some(dir.join("README.md"))
+    } else {
+        None
+    }
 }
 
 async fn parse_skill_md(path: &Path) -> Option<Skill> {
@@ -24,21 +34,32 @@ async fn parse_skill_md(path: &Path) -> Option<Skill> {
     let re_desc = Regex::new(r"description:\s*(.+)").unwrap();
     let re_ver = Regex::new(r"version:\s*(.+)").unwrap();
 
+    // Name is optional - derive from directory name if not present
     let name = re_name
-        .captures(fm_content)?
-        .get(1)?
-        .as_str()
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_string();
+        .captures(fm_content)
+        .and_then(|c| c.get(1))
+        .map(|m| {
+            m.as_str()
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string()
+        })
+        .unwrap_or_else(|| {
+            // Derive name from parent directory
+            path.parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown-skill")
+                .to_string()
+        });
+
+    // Description is also optional now
     let description = re_desc
-        .captures(fm_content)?
-        .get(1)?
-        .as_str()
-        .trim()
-        .trim_matches('\'')
-        .to_string();
+        .captures(fm_content)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().trim().trim_matches('\'').to_string())
+        .unwrap_or_else(|| "No description".to_string());
 
     let version = re_ver.captures(fm_content).and_then(|c| c.get(1)).map(|m| {
         m.as_str()
@@ -70,9 +91,11 @@ pub async fn discover_skills(path: String, subpath: Option<String>) -> Result<Ve
 
     // Check directly
     if has_skill_md(&search_path).await {
-        if let Some(skill) = parse_skill_md(&search_path.join("SKILL.md")).await {
-            skills.push(skill);
-            return Ok(skills);
+        if let Some(skill_file) = get_skill_file(&search_path).await {
+            if let Some(skill) = parse_skill_md(&skill_file).await {
+                skills.push(skill);
+                return Ok(skills);
+            }
         }
     }
 
@@ -83,7 +106,8 @@ pub async fn discover_skills(path: String, subpath: Option<String>) -> Result<Ve
         .filter_entry(|e| !SKIP_DIRS.contains(&e.file_name().to_str().unwrap_or("")))
         .filter_map(|e| e.ok())
     {
-        if entry.file_name() == "SKILL.md" {
+        let file_name = entry.file_name().to_str().unwrap_or("");
+        if file_name == "SKILL.md" || file_name == "README.md" {
             if let Some(skill) = parse_skill_md(entry.path()).await {
                 if !seen_names.contains(&skill.name) {
                     seen_names.insert(skill.name.clone());

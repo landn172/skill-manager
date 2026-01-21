@@ -1,70 +1,86 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
-import { useAgentsStore } from '@/stores/agents'
-import { ChevronLeft, ChevronRight, Save, CheckCircle2 } from 'lucide-vue-next'
+import { open } from '@tauri-apps/plugin-dialog'
+import { homeDir } from '@tauri-apps/api/path'
+import { ChevronRight, Save, Folder, FileCode } from 'lucide-vue-next'
 
 const router = useRouter()
-const agentsStore = useAgentsStore()
+const route = useRoute()
 
 const step = ref(1)
+const creating = ref(false)
 const form = ref({
   name: '',
   description: '',
-  content: '---\nname: \ndescription: \n---\n\n# Instructions\n\n1. \n2. ',
-  selectedAgents: [] as string[],
-  scope: 'global' as 'project' | 'global',
+  parentPath: '',
 })
+
+// Edit mode: read from query params
+const isEditMode = computed(() => !!route.query.edit)
+const editSkillPath = computed(() => (route.query.path as string) || '')
 
 onMounted(() => {
-  agentsStore.fetchAgents()
+  // If editing, populate form from query params
+  if (isEditMode.value) {
+    form.value.name = (route.query.name as string) || ''
+    form.value.description = (route.query.description as string) || ''
+    form.value.parentPath = editSkillPath.value // Use skill path as parentPath for display
+  }
 })
 
-watch(
-  () => form.value.name,
-  () => {
-    updateContent()
-  }
-)
-
-watch(
-  () => form.value.description,
-  () => {
-    updateContent()
-  }
-)
-
-function updateContent() {
-  const fm = `---\nname: ${form.value.name}\ndescription: ${form.value.description}\n---`
-  const body = form.value.content.split('---').pop() || ''
-  form.value.content = `${fm}\n${body.trim()}`
-}
-
-async function handleCreate() {
+async function selectParentPath() {
   try {
-    // 1. Create a temporary skill directory
-    // For now, simplify by just calling a "create_skill" command if we had one
-    // or just using the installer logic with a virtual skill object
-
-    await invoke('install_skill', {
-      skill: {
-        name: form.value.name,
-        description: form.value.description,
-        path: '', // Virtual path
-        metadata: {},
-      },
-      agents: form.value.selectedAgents,
-      scope: form.value.scope,
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      defaultPath: await homeDir(),
     })
 
-    // We need to actually write the content. Our current installer copies a directory.
-    // I should add a "create_and_install_skill" command or similar.
-
-    alert('Skill created and installed!')
-    router.push('/installed')
+    if (selected && typeof selected === 'string') {
+      form.value.parentPath = selected
+    }
   } catch (e) {
-    alert(`Failed to create skill: ${e}`)
+    console.error('Failed to select directory', e)
+  }
+}
+
+async function handleSubmit() {
+  creating.value = true
+  try {
+    if (isEditMode.value) {
+      // Update existing skill
+      await invoke('update_local_skill', {
+        skillPath: editSkillPath.value,
+        name: form.value.name || undefined,
+        description: form.value.description || undefined,
+      })
+      alert('Skill updated successfully!')
+      router.push('/marketplace')
+    } else {
+      // Create new skill
+      const result = await invoke<{
+        success: boolean
+        path: string
+        message: string
+      }>('create_skill', {
+        name: form.value.name,
+        description: form.value.description,
+        parentPath: form.value.parentPath,
+      })
+
+      if (result.success) {
+        alert(`Skill created successfully at ${result.path}`)
+        router.push('/installed')
+      } else {
+        throw new Error(result.message)
+      }
+    }
+  } catch (e) {
+    alert(`Failed to ${isEditMode.value ? 'update' : 'create'} skill: ${e}`)
+  } finally {
+    creating.value = false
   }
 }
 </script>
@@ -72,23 +88,37 @@ async function handleCreate() {
 <template>
   <div class="create-skill-page">
     <header class="header">
-      <h1>Create New Skill</h1>
-      <div class="steps">
+      <h1>{{ isEditMode ? 'Edit Skill' : 'Create New Skill' }}</h1>
+      <div v-if="!isEditMode" class="steps">
         <div class="step" :class="{ active: step >= 1 }">1</div>
         <div class="step-line"></div>
         <div class="step" :class="{ active: step >= 2 }">2</div>
-        <div class="step-line"></div>
-        <div class="step" :class="{ active: step >= 3 }">3</div>
       </div>
     </header>
 
     <div class="form-container">
+      <div v-if="!isEditMode" class="intro-box">
+        <FileCode :size="24" class="intro-icon" />
+        <p>
+          Scaffold a new skill directory with a standard structure (README,
+          Instructions) to start building your own agent skill.
+        </p>
+      </div>
+
       <!-- Step 1: Basic Info -->
       <section v-if="step === 1" class="form-step">
         <h2>Basic Information</h2>
         <div class="input-group">
           <label>Skill Name</label>
-          <input v-model="form.name" placeholder="e.g. frontend-helper" />
+          <input
+            v-model="form.name"
+            placeholder="e.g. react-hook-generator"
+            autofocus
+          />
+          <span class="hint"
+            >This will be used as the folder name (kebab-case
+            recommended).</span
+          >
         </div>
         <div class="input-group">
           <label>Description</label>
@@ -99,87 +129,44 @@ async function handleCreate() {
         </div>
       </section>
 
-      <!-- Step 2: Target Agents -->
-      <section v-if="step === 2" class="form-step">
-        <h2>Target Agents & Scope</h2>
-        <div class="agent-selection">
-          <div
-            v-for="agent in agentsStore.agents"
-            :key="agent.name"
-            class="agent-option"
-            :class="{
-              selected: form.selectedAgents.includes(agent.name),
-              disabled: !agent.installed,
-            }"
-            @click="
-              agent.installed &&
-                (form.selectedAgents.includes(agent.name)
-                  ? (form.selectedAgents = form.selectedAgents.filter(
-                      (a) => a !== agent.name
-                    ))
-                  : form.selectedAgents.push(agent.name))
-            "
+      <!-- Step 2: Location (only for Create mode) -->
+      <section v-if="step === 2 && !isEditMode" class="form-step">
+        <h2>Location</h2>
+        <div class="input-group">
+          <label>Parent Directory</label>
+          <div class="path-selector">
+            <input
+              v-model="form.parentPath"
+              placeholder="Select where to create the skill folder..."
+              readonly
+            />
+            <button class="btn secondary small" @click="selectParentPath">
+              <Folder :size="16" />
+              Browse
+            </button>
+          </div>
+          <span class="hint"
+            >A new folder named "{{ form.name || 'skill-name' }}" will be
+            created here.</span
           >
-            <span class="agent-icon">{{
-              agent.icon === 'Sparkles'
-                ? '✨'
-                : agent.icon === 'Terminal'
-                ? '💻'
-                : agent.icon === 'Bot'
-                ? '🤖'
-                : agent.icon === 'Code'
-                ? '📄'
-                : '🖱️'
-            }}</span>
-            <div class="agent-name">{{ agent.display_name }}</div>
-            <div
-              class="check-wrap"
-              v-if="form.selectedAgents.includes(agent.name)"
-            >
-              <CheckCircle2 :size="16" />
-            </div>
-          </div>
         </div>
-
-        <div class="scope-selection">
-          <label>Installation Scope</label>
-          <div class="scope-options">
-            <button
-              class="scope-btn"
-              :class="{ active: form.scope === 'project' }"
-              @click="form.scope = 'project'"
-            >
-              Project
-            </button>
-            <button
-              class="scope-btn"
-              :class="{ active: form.scope === 'global' }"
-              @click="form.scope = 'global'"
-            >
-              Global
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Step 3: Content -->
-      <section v-if="step === 3" class="form-step full-height">
-        <h2>Skill Instructions</h2>
-        <textarea class="content-editor" v-model="form.content"></textarea>
       </section>
     </div>
 
     <footer class="footer">
-      <button v-if="step > 1" class="btn secondary" @click="step--">
-        <ChevronLeft :size="18" />
+      <button
+        v-if="step > 1 && !isEditMode"
+        class="btn secondary"
+        @click="step--"
+      >
         <span>Back</span>
       </button>
       <div class="spacer"></div>
       <button
-        v-if="step < 3"
+        v-if="step < 2 && !isEditMode"
         class="btn primary"
         @click="step++"
-        :disabled="step === 1 && !form.name"
+        :disabled="!form.name"
       >
         <span>Next</span>
         <ChevronRight :size="18" />
@@ -187,11 +174,19 @@ async function handleCreate() {
       <button
         v-else
         class="btn primary"
-        @click="handleCreate"
-        :disabled="form.selectedAgents.length === 0"
+        @click="handleSubmit"
+        :disabled="(!isEditMode && !form.parentPath) || creating"
       >
         <Save :size="18" />
-        <span>Create Skill</span>
+        <span>{{
+          creating
+            ? isEditMode
+              ? 'Saving...'
+              : 'Creating...'
+            : isEditMode
+              ? 'Save Changes'
+              : 'Create Skill'
+        }}</span>
       </button>
     </footer>
   </div>
@@ -208,7 +203,23 @@ async function handleCreate() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 40px;
+  margin-bottom: 32px;
+}
+
+.intro-box {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background-color: var(--bg-secondary);
+  padding: 16px;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  margin-bottom: 32px;
+  color: var(--text-secondary);
+}
+
+.intro-icon {
+  color: var(--accent-primary);
 }
 
 .steps {
@@ -247,7 +258,7 @@ async function handleCreate() {
   flex: 1;
   display: flex;
   flex-direction: column;
-  max-width: 800px;
+  max-width: 600px;
   margin: 0 auto;
   width: 100%;
 }
@@ -256,6 +267,7 @@ async function handleCreate() {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  animation: fadeIn 0.3s ease;
 }
 
 .form-step.full-height {
@@ -288,6 +300,8 @@ textarea {
   padding: 12px 16px;
   outline: none;
   transition: border-color 0.2s;
+  color: var(--text-primary);
+  font-size: 14px;
 }
 
 input:focus,
@@ -353,6 +367,16 @@ textarea {
   background-color: rgba(139, 92, 246, 0.05);
 }
 
+.path-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .footer {
   margin-top: 40px;
   display: flex;
@@ -371,6 +395,14 @@ textarea {
   padding: 10px 24px;
   border-radius: 10px;
   font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn.primary {
@@ -378,15 +410,32 @@ textarea {
   color: white;
 }
 
-.btn.primary:disabled {
-  opacity: 0.5;
+.btn.primary:hover:not(:disabled) {
+  filter: brightness(1.1);
 }
 
 .btn.secondary {
+  background-color: var(--bg-tertiary);
   color: var(--text-secondary);
 }
 
 .btn.secondary:hover {
   background-color: var(--bg-hover);
+}
+
+.btn.small {
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

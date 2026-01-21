@@ -12,16 +12,25 @@ import {
   Folder,
   Key,
   ExternalLink,
+  Sun,
+  Moon,
+  Monitor,
+  Palette,
+  Download,
+  Upload,
 } from 'lucide-vue-next'
+import { useThemeStore } from '@/stores/theme'
 import AgentIcon from '@/components/icons/AgentIcon.vue'
 import { useProjectStore } from '@/stores/project'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, save } from '@tauri-apps/plugin-dialog'
 import { homeDir } from '@tauri-apps/api/path'
 import { invoke } from '@tauri-apps/api/core'
+import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs'
 
 const agentsStore = useAgentsStore()
 const marketplaceStore = useMarketplaceStore()
 const projectStore = useProjectStore()
+const themeStore = useThemeStore()
 
 // API Key management
 const apiKeyInput = ref('')
@@ -171,6 +180,67 @@ const handleAddProject = async () => {
     console.error('Failed to add project', e)
   }
 }
+
+async function handleAddLocalSource() {
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      defaultPath: await homeDir(),
+    })
+
+    if (selected && typeof selected === 'string') {
+      const name = selected.split('/').pop() || 'Local Skills'
+      // Prompt for name (optional, could use a modal but prompt is simple for now)
+      // Since window.prompt might be blocked or ugly, let's just use directory name for now
+      // or repurpose the registry modal?
+      // Let's just use directory name + "(Local)" to start, can be improved.
+      // Actually, let's use a browser prompt if possible or just auto-add.
+      // Auto-add is smoothest.
+
+      await marketplaceStore.addSource(selected, name, 'local')
+      alert(`Added local source: ${name}`)
+      await marketplaceStore.fetchSkills() // Refresh skills to show new ones
+    }
+  } catch (e) {
+    alert(`Failed to add local source: ${e}`)
+  }
+}
+
+async function handleExportConfig() {
+  try {
+    const json = await invoke<string>('export_config')
+    const filePath = await save({
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      defaultPath: 'skill-manager-config.json',
+    })
+
+    if (filePath) {
+      await writeTextFile(filePath, json)
+      alert('Configuration exported successfully!')
+    }
+  } catch (e) {
+    alert(`Failed to export config: ${e}`)
+  }
+}
+
+async function handleImportConfig() {
+  try {
+    const filePath = await open({
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      multiple: false,
+    })
+
+    if (filePath && typeof filePath === 'string') {
+      const json = await readTextFile(filePath)
+      await invoke('import_config', { json })
+      alert('Configuration imported successfully! refreshing...')
+      marketplaceStore.fetchSources()
+    }
+  } catch (e) {
+    alert(`Failed to import config: ${e}`)
+  }
+}
 </script>
 
 <template>
@@ -180,6 +250,44 @@ const handleAddProject = async () => {
     </header>
 
     <div class="sections">
+      <!-- Appearance Section -->
+      <section class="settings-section">
+        <div class="section-header">
+          <Palette :size="20" class="section-icon" />
+          <h2>App Appearance</h2>
+        </div>
+        <p class="section-desc">
+          Customize the look and feel of the application.
+        </p>
+
+        <div class="theme-selector">
+          <button
+            class="theme-btn"
+            :class="{ active: themeStore.theme === 'light' }"
+            @click="themeStore.setTheme('light')"
+          >
+            <Sun :size="18" />
+            <span>Light</span>
+          </button>
+          <button
+            class="theme-btn"
+            :class="{ active: themeStore.theme === 'dark' }"
+            @click="themeStore.setTheme('dark')"
+          >
+            <Moon :size="18" />
+            <span>Dark</span>
+          </button>
+          <button
+            class="theme-btn"
+            :class="{ active: themeStore.theme === 'system' }"
+            @click="themeStore.setTheme('system')"
+          >
+            <Monitor :size="18" />
+            <span>System</span>
+          </button>
+        </div>
+      </section>
+
       <!-- API Configuration Section -->
       <section class="settings-section">
         <div class="section-header">
@@ -325,6 +433,10 @@ const handleAddProject = async () => {
               <Plus :size="18" />
               <span>Add Registry Source</span>
             </button>
+            <button class="add-btn" @click="handleAddLocalSource">
+              <Folder :size="18" />
+              <span>Add Local Skill Folder</span>
+            </button>
           </div>
         </div>
       </section>
@@ -433,6 +545,27 @@ const handleAddProject = async () => {
         </div>
       </section>
     </div>
+    <!-- Data Management -->
+    <section class="settings-section">
+      <div class="section-header">
+        <Download :size="20" class="section-icon" />
+        <h2>Data & Storage</h2>
+      </div>
+      <p class="section-desc">
+        Manage your application data and configuration.
+      </p>
+
+      <div class="data-actions">
+        <button class="action-btn" @click="handleExportConfig">
+          <Download :size="16" />
+          <span>Export Configuration</span>
+        </button>
+        <button class="action-btn" @click="handleImportConfig">
+          <Upload :size="16" />
+          <span>Import Configuration</span>
+        </button>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -477,6 +610,64 @@ h2 {
   color: var(--text-secondary);
   font-size: 14px;
   margin: 0 0 20px;
+}
+
+/* Theme Selector */
+.theme-selector {
+  display: flex;
+  gap: 12px;
+  background-color: var(--bg-secondary);
+  padding: 6px;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  width: fit-content;
+}
+
+.theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.theme-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.data-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background-color: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+}
+
+.theme-btn.active {
+  background-color: var(--bg-tertiary);
+  color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 /* API Configuration Styles */
@@ -825,6 +1016,12 @@ input:checked + .slider:before {
   border-radius: 4px;
 }
 
+.add-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .add-btn {
   display: flex;
   align-items: center;
@@ -836,6 +1033,8 @@ input:checked + .slider:before {
   color: var(--text-secondary);
   transition: all 0.2s;
   margin-top: 8px;
+  flex: 1;
+  min-width: 200px;
 }
 
 .add-btn:hover {

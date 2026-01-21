@@ -3,7 +3,7 @@ import { onMounted, computed, ref } from 'vue'
 import type { InstalledSkill } from '@/types'
 import SkillList from '@/components/skill/SkillList.vue'
 import SkillEditor from '@/components/skill/SkillEditor.vue'
-import { RefreshCw, Package } from 'lucide-vue-next'
+import { RefreshCw, Package, Plus } from 'lucide-vue-next'
 import { useSkillsStore } from '@/stores/skills'
 
 const skillsStore = useSkillsStore()
@@ -60,6 +60,10 @@ function handleScopeChange(newScope: 'project' | 'global') {
         <button class="icon-btn" @click="handleRefresh" :disabled="loading">
           <RefreshCw :size="20" :class="{ spinning: loading }" />
         </button>
+        <router-link to="/create" class="primary-btn small">
+          <Plus :size="16" />
+          Create Skill
+        </router-link>
       </div>
 
       <div class="scope-toggle">
@@ -121,6 +125,7 @@ function handleScopeChange(newScope: 'project' | 'global') {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+  gap: 16px;
 }
 
 h1 {
@@ -200,5 +205,22 @@ h1 {
   border-top-color: var(--accent-primary);
   animation: spin 1s ease-in-out infinite;
   margin-bottom: 16px;
+}
+
+.primary-btn.small {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: var(--accent-primary);
+  color: white;
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.primary-btn.small:hover {
+  filter: brightness(1.1);
 }
 </style>

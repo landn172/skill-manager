@@ -42,19 +42,27 @@ pub async fn get_marketplace_sources() -> Result<Vec<MarketplaceSource>, String>
 pub async fn add_marketplace_source(
     url: String,
     name: String,
+    source_type: Option<String>,
 ) -> Result<Vec<MarketplaceSource>, String> {
     // Use timestamp for ID generation to avoid adding md5 dependency
     let id = format!("custom_{}", chrono::Utc::now().timestamp_millis());
+
+    let source_type_enum = match source_type.as_deref() {
+        Some("git") => SourceType::Git,
+        Some("local") => SourceType::Local,
+        Some("api") => SourceType::Api,
+        _ => SourceType::Registry,
+    };
 
     let new_source = MarketplaceSource {
         id,
         name,
         url,
-        description: Some("Custom registry source".into()),
+        description: Some("Custom source".into()),
         official: false,
         enabled: true,
         last_fetched: None,
-        source_type: SourceType::Registry,
+        source_type: source_type_enum,
     };
 
     let mut custom_sources = Vec::new();

@@ -1,4 +1,6 @@
 pub mod agents;
+pub mod authoring;
+pub mod config;
 pub mod installer;
 pub mod marketplace;
 pub mod projects;
