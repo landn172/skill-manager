@@ -10,11 +10,14 @@
     "core:window:default",
     "opener:default",
     "dialog:default",
+    "updater:default",
+    "process:default",
     {
       "identifier": "http:default",
       "allow": [
         { "url": "https://skillsmp.com/*" },
-        { "url": "https://*.skillsmp.com/*" }
+        { "url": "https://*.skillsmp.com/*" },
+        { "url": "https://github.com/*" }
       ]
     }
   ]

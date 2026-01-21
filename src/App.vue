@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import { useThemeStore } from '@/stores/theme'
 import OnboardingModal from '@/components/onboarding/OnboardingModal.vue'
+import UpdateNotification from '@/components/common/UpdateNotification.vue'
 
 // Initialize theme
 useThemeStore()
@@ -27,6 +28,7 @@ function closeOnboarding() {
     <router-view />
     <OnboardingModal :show="showOnboarding" @close="closeOnboarding" />
   </MainLayout>
+  <UpdateNotification />
 </template>
 
 <style>
