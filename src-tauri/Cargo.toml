@@ -45,4 +45,8 @@ tauri-plugin-http = "2.5.6"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-updater = "2.9.0"
 
-
+# Optimized for CI build speed
+[profile.release]
+lto = "thin"
+codegen-units = 16
+opt-level = 3

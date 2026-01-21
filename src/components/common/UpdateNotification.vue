@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, shallowRef, toRaw, onMounted } from "vue";
 import { check, Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { Download, RefreshCw, X, CheckCircle, AlertCircle } from "lucide-vue-next";
 
 const updateAvailable = ref(false);
-const updateInfo = ref<Update | null>(null);
+// 使用 shallowRef 避免 Vue 代理破坏 Update 类的私有字段
+const updateInfo = shallowRef<Update | null>(null);
 const isDownloading = ref(false);
 const downloadProgress = ref(0);
 const downloadTotal = ref(0);
@@ -39,7 +40,9 @@ async function downloadAndInstall() {
     updateError.value = null;
     downloadProgress.value = 0;
 
-    await updateInfo.value.downloadAndInstall((event) => {
+    // 使用 toRaw() 获取原始 Update 对象，避免 Vue 代理干扰私有字段
+    const rawUpdate = toRaw(updateInfo.value);
+    await rawUpdate.downloadAndInstall((event) => {
       switch (event.event) {
         case "Started":
           downloadTotal.value = event.data.contentLength ?? 0;
@@ -229,6 +232,7 @@ export default {
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
