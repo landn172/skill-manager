@@ -1,6 +1,25 @@
 # Skill Manager 🧠
 
+[English](./README.md) | [中文](./README.zh-CN.md)
+
 **Skill Manager** is a powerful desktop application built with Tauri, Vue 3, and Rust, designed to manage skills for various AI agents (Anthropic, Claude Code, OpenCode, Cursor, and more).
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/marketplace.png" alt="Marketplace" width="600" />
+</p>
+<p align="center"><em>Marketplace - Browse and discover skills from multiple sources</em></p>
+
+<p align="center">
+  <img src="docs/screenshots/installed.png" alt="Installed Skills" width="600" />
+</p>
+<p align="center"><em>Installed Skills - Manage your installed skills</em></p>
+
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="Settings" width="600" />
+</p>
+<p align="center"><em>Settings - Auto-detect installed AI coding agents</em></p>
 
 ## 🚀 Features
 
