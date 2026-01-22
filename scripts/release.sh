@@ -47,9 +47,35 @@ else
   sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" "$CARGO_TOML"
 fi
 
+# Update Cargo.lock version for skill-manager package
+echo "🔒 Updating Cargo.lock..."
+CARGO_LOCK="src-tauri/Cargo.lock"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  # Use awk to update version only for skill-manager package
+  awk -v version="$VERSION" '
+    /^\[\[package\]\]/ { in_skill_manager = 0 }
+    /^name = "skill-manager"/ { in_skill_manager = 1 }
+    in_skill_manager && /^version = / { 
+      print "version = \"" version "\""
+      next 
+    }
+    { print }
+  ' "$CARGO_LOCK" > "${CARGO_LOCK}.tmp" && mv "${CARGO_LOCK}.tmp" "$CARGO_LOCK"
+else
+  awk -v version="$VERSION" '
+    /^\[\[package\]\]/ { in_skill_manager = 0 }
+    /^name = "skill-manager"/ { in_skill_manager = 1 }
+    in_skill_manager && /^version = / { 
+      print "version = \"" version "\""
+      next 
+    }
+    { print }
+  ' "$CARGO_LOCK" > "${CARGO_LOCK}.tmp" && mv "${CARGO_LOCK}.tmp" "$CARGO_LOCK"
+fi
+
 # Git operations
 echo "📝 Committing changes..."
-git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
+git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
 git commit -m "chore: release v$VERSION"
 
 echo "🏷️  Creating tag v$VERSION..."
