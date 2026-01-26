@@ -1,46 +1,58 @@
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
+import { useToastStore } from "./toast";
 import type { MarketplaceSource, MarketplaceSkill, SearchMode } from "@/types";
 
+interface FetchProgress {
+  current: number;
+  total: number;
+  currentSource: string;
+  status: "idle" | "loading_sources" | "fetching" | "done";
+}
+
+interface MarketplaceState {
+  sources: MarketplaceSource[];
+  skills: MarketplaceSkill[];
+  loading: boolean;
+  error: string | null;
+  searchQuery: string;
+  selectedSource: string | null;
+  searchMode: SearchMode;
+  hasApiKey: boolean;
+  sortBy: "name" | "stars" | "updated";
+  fetchProgress: FetchProgress;
+  cachedSkills: import("@/types").CacheMetadata[];
+}
+
 export const useMarketplaceStore = defineStore("marketplace", {
-  state: () => ({
-    sources: [] as MarketplaceSource[],
-    skills: [] as MarketplaceSkill[],
+  state: (): MarketplaceState => ({
+    sources: [],
+    skills: [],
     loading: false,
-    error: null as string | null,
+    error: null,
     searchQuery: "",
-    selectedSource: null as string | null,
-    searchMode: "keyword" as SearchMode,
+    selectedSource: null,
+    searchMode: "keyword",
     hasApiKey: false,
-    sortBy: "stars" as "name" | "stars" | "updated",
-    selectedTags: [] as string[],
+    sortBy: "stars",
     fetchProgress: {
       current: 0,
       total: 0,
       currentSource: "",
-      status: "" as "idle" | "loading_sources" | "fetching" | "done",
+      status: "idle",
     },
-    cachedSkills: [] as import("@/types").CacheMetadata[],
+    cachedSkills: [],
   }),
 
   getters: {
-    isSkillCached: (state) => (skillName: string) => {
+    isSkillCached: (state: MarketplaceState) => (skillName: string) => {
       return state.cachedSkills.some((s) => s.skill_name === skillName);
     },
-    getCachedAt: (state) => (skillName: string) => {
+    getCachedAt: (state: MarketplaceState) => (skillName: string) => {
       return state.cachedSkills.find((s) => s.skill_name === skillName)?.downloaded_at;
     },
-    availableTags(state): string[] {
-      const tagSet = new Set<string>();
-      state.skills.forEach((skill) => {
-        if (skill.tags) {
-          skill.tags.forEach((tag) => tagSet.add(tag));
-        }
-      });
-      return Array.from(tagSet).sort();
-    },
 
-    filteredSkills(state) {
+    filteredSkills(state: MarketplaceState) {
       let result = state.skills;
 
       // 1. Filter by Source
@@ -90,13 +102,6 @@ export const useMarketplaceStore = defineStore("marketplace", {
         result = Array.from(uniqueSkills.values());
       }
 
-      // 2. Filter by Tags
-      if (state.selectedTags.length > 0) {
-        result = result.filter(
-          (s) => s.tags && state.selectedTags.every((tag) => s.tags.includes(tag)),
-        );
-      }
-
       // 3. Filter by Search Query (Keyword mode)
       if (state.searchQuery && state.selectedSource !== "skillsmp") {
         const query = state.searchQuery.toLowerCase();
@@ -107,15 +112,10 @@ export const useMarketplaceStore = defineStore("marketplace", {
       }
 
       // 4. Sort
-      result.sort((a, b) => {
+      result.sort((a: MarketplaceSkill, b: MarketplaceSkill) => {
         if (state.sortBy === "stars") {
           return (b.stars || 0) - (a.stars || 0);
         } else if (state.sortBy === "updated") {
-          // Assuming metadata has updated_at, otherwise fallback to 0
-          // The current Skill type definition isn't fully visible, but usually there's no updated_at in standard list.
-          // If not available, stable sort or name.
-          // Let's stick to Name and Stars for now as confirmed features.
-          // If 'updated' is requested but data missing, fallback to name.
           return 0;
         } else {
           return a.name.localeCompare(b.name);
@@ -125,7 +125,7 @@ export const useMarketplaceStore = defineStore("marketplace", {
       return result;
     },
 
-    skillsmpSource(state) {
+    skillsmpSource(state: MarketplaceState) {
       return state.sources.find((s) => s.id === "skillsmp");
     },
   },
@@ -177,6 +177,8 @@ export const useMarketplaceStore = defineStore("marketplace", {
         this.fetchProgress.total = sourcesToFetch.length;
         this.fetchProgress.status = "fetching";
 
+        const toastStore = useToastStore();
+
         // Fetch sources one by one to show progress
         for (let i = 0; i < sourcesToFetch.length; i++) {
           const source = sourcesToFetch[i];
@@ -203,16 +205,13 @@ export const useMarketplaceStore = defineStore("marketplace", {
             this.skills.push(...uniqueSkills);
           } catch (e) {
             console.error(`Failed to fetch from ${source.name}:`, e);
-            // Store error for SkillsMP specifically
-            if (source.id === "skillsmp") {
-              this.error = String(e);
-            }
+            toastStore.error(`Failed to load ${source.name}: ${e instanceof Error ? e.message : String(e)}`);
           }
         }
 
         this.fetchProgress.status = "done";
       } catch (e) {
-        this.error = String(e);
+        useToastStore().error(`Error during fetch: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
         this.loading = false;
       }
@@ -222,9 +221,6 @@ export const useMarketplaceStore = defineStore("marketplace", {
       if (!query.trim()) {
         return this.fetchSkills("skillsmp");
       }
-
-      this.loading = true;
-      this.error = null;
 
       try {
         if (this.searchMode === "ai") {
@@ -244,7 +240,7 @@ export const useMarketplaceStore = defineStore("marketplace", {
           this.skills.push(...results);
         }
       } catch (e) {
-        this.error = String(e);
+        useToastStore().error(`Search failed: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
         this.loading = false;
       }
@@ -338,6 +334,20 @@ export const useMarketplaceStore = defineStore("marketplace", {
 
     setSearchMode(mode: SearchMode) {
       this.searchMode = mode;
+    },
+
+    async discoverFromUrl(url: string): Promise<MarketplaceSkill[]> {
+      this.loading = true;
+      try {
+        const skills = await invoke<MarketplaceSkill[]>("discover_skills_from_url", { url });
+        return skills;
+      } catch (e) {
+        console.error("Failed to discover from URL:", e);
+        useToastStore().error(`Discovery failed: ${e instanceof Error ? e.message : String(e)}`);
+        throw e;
+      } finally {
+        this.loading = false;
+      }
     },
 
     // Placeholder for adding custom sources (to be implemented)

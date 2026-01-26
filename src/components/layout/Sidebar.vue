@@ -42,9 +42,10 @@ const navItems = [
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar glass">
     <div class="logo">
       <img src="/logo.png" alt="Skill Manager Logo" class="logo-img" />
+      <span class="logo-text">Skill Manager</span>
     </div>
 
     <div class="project-switcher">
@@ -73,13 +74,15 @@ const navItems = [
         class="nav-item"
         :class="{ active: route.path === item.path }"
       >
-        <component :is="item.icon" :size="20" />
+        <div class="icon-wrap">
+          <component :is="item.icon" :size="20" />
+        </div>
         <span>{{ item.name }}</span>
       </router-link>
     </nav>
 
     <div class="footer">
-      <div class="version">v{{ appVersion }}</div>
+      <div class="version">Version {{ appVersion }}</div>
     </div>
   </aside>
 </template>
@@ -87,78 +90,77 @@ const navItems = [
 <style scoped>
 .sidebar {
   width: var(--sidebar-width);
-  background-color: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 24px 12px;
+  padding: 32px 16px;
+  z-index: 10;
+  border-right: 1px solid var(--glass-border);
 }
 
 .logo {
   display: flex;
-  justify-content: center;
-  padding: 0 12px 32px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 40px;
 }
 
 .logo-img {
-  width: 48px;
-  height: 48px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
 }
 
-.logo .text {
-  font-weight: 700;
-  font-size: 18px;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+.logo-text {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: var(--accent-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .project-switcher {
-  margin: 0 12px 24px;
+  margin-bottom: 32px;
 }
 
 .switcher-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   color: var(--text-muted);
-  letter-spacing: 0.05em;
-  margin-bottom: 8px;
-  padding-left: 4px;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+  padding-left: 8px;
 }
 
 .select-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
 }
 
 select {
   width: 100%;
   appearance: none;
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px 32px 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 10px 36px 10px 14px;
   font-size: 13px;
+  font-weight: 500;
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 select:hover {
-  border-color: var(--accent-primary);
-}
-
-select:focus {
-  outline: none;
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--glass-border);
 }
 
 .select-icon {
   position: absolute;
-  right: 12px;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
   pointer-events: none;
   color: var(--text-muted);
 }
@@ -166,38 +168,56 @@ select:focus {
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   flex: 1;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--border-radius);
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
   color: var(--text-secondary);
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+}
+
+.icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s;
 }
 
 .nav-item:hover {
-  background-color: var(--bg-hover);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
+  transform: translateX(4px);
 }
 
 .nav-item.active {
-  background-color: var(--bg-tertiary);
+  background: rgba(139, 92, 246, 0.1);
   color: var(--accent-primary);
-  font-weight: 500;
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+.nav-item.active .icon-wrap {
+  color: var(--accent-primary);
+  transform: scale(1.1);
 }
 
 .footer {
-  padding: 12px;
-  border-top: 1px solid var(--border-color);
+  padding: 16px 8px 0;
+  border-top: 1px solid var(--glass-border);
 }
 
 .version {
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 </style>

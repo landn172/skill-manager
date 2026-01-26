@@ -9,4 +9,5 @@ pub mod projects;
 pub mod registry;
 pub mod skills;
 pub mod skillsmp;
+pub mod skillssh;
 pub mod utils;

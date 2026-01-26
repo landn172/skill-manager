@@ -12,6 +12,7 @@ use commands::migration::*;
 use commands::projects::*;
 use commands::skills::*;
 use commands::skillsmp::*;
+use commands::skillssh::*;
 use commands::utils::*;
 use utils::db::init_db;
 
@@ -70,6 +71,7 @@ pub fn run() {
             add_marketplace_source,
             remove_marketplace_source,
             toggle_marketplace_source,
+            discover_skills_from_url,
             // SkillsMP API
             get_skillsmp_api_key,
             get_skillsmp_api_key_masked,
@@ -78,6 +80,9 @@ pub fn run() {
             clear_skillsmp_api_key,
             fetch_skillsmp_skills,
             search_skillsmp_ai,
+            // Skills.sh API
+            fetch_skillssh_skills,
+            search_skillssh_skills,
             // Config
             export_config,
             import_config,

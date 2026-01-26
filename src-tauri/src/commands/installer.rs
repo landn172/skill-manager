@@ -63,6 +63,40 @@ pub async fn install_skill(
         },
     );
 
+    // Check if we have a repo field (from SkillsMP) or can derive it
+    let repo_url = skill
+        .metadata
+        .get("repo")
+        .filter(|r| !r.is_empty())
+        .map(|r| {
+            // If repo is in "owner/repo" format, convert to full URL
+            if !r.contains("://") {
+                format!("https://github.com/{}", r)
+            } else {
+                r.to_string()
+            }
+        })
+        .or_else(|| {
+            skill
+                .metadata
+                .get("repo_url")
+                .filter(|r| !r.is_empty())
+                .map(|r| r.to_string())
+        })
+        .or_else(|| {
+            // Try to extract repo from path if it's a GitHub URL
+            if skill.path.contains("github.com") {
+                Some(skill.path.clone())
+            } else if skill.path.contains("raw.githubusercontent.com") {
+                // Convert raw.githubusercontent.com/owner/repo/branch/path to github clone URL
+                let re = regex::Regex::new(r"raw\.githubusercontent\.com/([^/]+)/([^/]+)").ok()?;
+                re.captures(&skill.path)
+                    .map(|c| format!("https://github.com/{}/{}.git", &c[1], &c[2]))
+            } else {
+                None
+            }
+        });
+
     // For remote skills, we need to download to a temp location first
     let source_path = if is_remote {
         let _ = app.emit(
@@ -75,42 +109,7 @@ pub async fn install_skill(
             },
         );
 
-        // Check if we have a repo field (from SkillsMP)
-        let repo_url = skill
-            .metadata
-            .get("repo")
-            .filter(|r| !r.is_empty())
-            .map(|r| {
-                // If repo is in "owner/repo" format, convert to full URL
-                if !r.contains("://") {
-                    format!("https://github.com/{}", r)
-                } else {
-                    r.to_string()
-                }
-            })
-            .or_else(|| {
-                skill
-                    .metadata
-                    .get("repo_url")
-                    .filter(|r| !r.is_empty())
-                    .map(|r| r.to_string())
-            })
-            .or_else(|| {
-                // Try to extract repo from path if it's a GitHub URL
-                if skill.path.contains("github.com") {
-                    Some(skill.path.clone())
-                } else if skill.path.contains("raw.githubusercontent.com") {
-                    // Convert raw.githubusercontent.com/owner/repo/branch/path to github clone URL
-                    let re =
-                        regex::Regex::new(r"raw\.githubusercontent\.com/([^/]+)/([^/]+)").ok()?;
-                    re.captures(&skill.path)
-                        .map(|c| format!("https://github.com/{}/{}.git", &c[1], &c[2]))
-                } else {
-                    None
-                }
-            });
-
-        if let Some(repo) = repo_url {
+        if let Some(ref repo) = repo_url {
             let _ = app.emit(
                 "install-progress",
                 ProgressEvent {
@@ -127,15 +126,15 @@ pub async fn install_skill(
             use crate::utils::cache;
             let cache_dir = cache::get_skill_cache_dir(&skill.name);
 
-            let should_download = !cache::is_cache_valid(&skill.name).await;
+            let should_download = cache::should_download(&skill.name).await;
 
-            if !should_download {
+            if should_download {
                 let _ = app.emit(
                     "install-progress",
                     ProgressEvent {
                         skill: skill.name.clone(),
                         status: "downloading".to_string(),
-                        message: "Using cached download...".to_string(),
+                        message: "Downloading from repository...".to_string(),
                         agent: None,
                     },
                 );
@@ -161,6 +160,9 @@ pub async fn install_skill(
 
                 // Write cache metadata
                 let _ = cache::write_cache_metadata(&skill.name, &repo).await;
+
+                // Remove quarantine on cache to avoid permission issues during copy
+                let _ = remove_quarantine(&cache_dir).await;
             } else {
                 let _ = app.emit(
                     "install-progress",
@@ -173,7 +175,11 @@ pub async fn install_skill(
                 );
             }
 
-            if let Some(subpath) = parsed.subpath {
+            let final_subpath = parsed
+                .subpath
+                .or_else(|| skill.metadata.get("subpath").cloned());
+
+            if let Some(subpath) = final_subpath {
                 cache_dir.join(subpath)
             } else {
                 cache_dir
@@ -290,6 +296,27 @@ pub async fn install_skill(
                     skill.version.as_deref(),
                     "install",
                 );
+
+                // Write install receipt
+                let source_type = if is_remote { "Git" } else { "Local" };
+                let source_url = if is_remote {
+                    repo_url.clone().unwrap_or_else(|| skill.path.clone())
+                } else {
+                    skill.path.clone()
+                };
+
+                let receipt = crate::models::skill::InstallReceipt {
+                    skill_name: skill.name.clone(),
+                    source_url,
+                    source_type: source_type.to_string(),
+                    marketplace_name: skill.source_name.clone(),
+                    marketplace_id: skill.source_id.clone(),
+                    installed_at: chrono::Utc::now().to_rfc3339(),
+                };
+
+                if let Ok(json) = serde_json::to_string_pretty(&receipt) {
+                    let _ = tokio::fs::write(target_dir.join(".install_receipt.json"), json).await;
+                }
             }
             Err(e) => {
                 results.push(InstallResult {

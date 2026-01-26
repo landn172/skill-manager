@@ -30,6 +30,10 @@ pub async fn is_cache_valid(skill_name: &str) -> bool {
     meta_path.exists()
 }
 
+pub async fn should_download(skill_name: &str) -> bool {
+    !is_cache_valid(skill_name).await
+}
+
 pub async fn write_cache_metadata(skill_name: &str, source_url: &str) -> Result<(), String> {
     let cache_dir = get_skill_cache_dir(skill_name);
     fs::create_dir_all(&cache_dir)

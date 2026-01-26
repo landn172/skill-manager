@@ -20,24 +20,38 @@
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 
-  --sidebar-width: 240px;
+  --sidebar-width: 200px;
+
+  /* Glassmorphism Tokens */
+  --glass-bg: rgba(15, 15, 18, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: blur(12px);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+
+  /* Modern Gradients */
+  --accent-gradient: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
 }
 
 [data-theme="light"] {
   --bg-primary: #ffffff;
-  --bg-secondary: #f4f4f5;
-  --bg-tertiary: #e4e4e7;
-  --bg-hover: #f4f4f5;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-hover: #e2e8f0;
 
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
-  --text-muted: #71717a;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
 
-  --accent-primary: #7c3aed;
-  --accent-secondary: #4f46e5;
-  /* Accents can remain similar, just slightly adjusted for contrast if needed */
+  --accent-primary: #6366f1;
+  --accent-secondary: #8b5cf6;
 
-  --border-color: #e4e4e7;
+  --border-color: #e2e8f0;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+
+  /* Glassmorphism Tokens Light */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-blur: blur(12px);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
 }

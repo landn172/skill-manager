@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, shallowRef, toRaw, onMounted } from "vue";
+import { ref, shallowRef, toRaw, onMounted, computed } from "vue";
 import { check, Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { Download, RefreshCw, X, CheckCircle, AlertCircle } from "lucide-vue-next";
+import BaseButton from "@/components/common/BaseButton.vue";
 
 const updateAvailable = ref(false);
 // 使用 shallowRef 避免 Vue 代理破坏 Update 类的私有字段
@@ -87,211 +88,155 @@ const progressPercent = computed(() => {
 
 <template>
   <Transition name="slide">
-    <div v-if="updateAvailable && showNotification" class="update-notification">
-      <!-- Close button -->
+    <div v-if="updateAvailable && showNotification" class="update-notification glass-card">
       <button class="close-btn" @click="dismiss" :disabled="isDownloading">
         <X :size="16" />
       </button>
 
-      <!-- Update complete state -->
       <template v-if="updateComplete">
         <div class="notification-content">
           <CheckCircle class="icon success" :size="20" />
           <div class="text">
-            <span class="title">Update installed!</span>
-            <span class="subtitle">Restarting app...</span>
+            <span class="title">Update Success</span>
+            <span class="subtitle">Restarting to apply changes...</span>
           </div>
         </div>
       </template>
 
-      <!-- Error state -->
       <template v-else-if="updateError">
         <div class="notification-content">
           <AlertCircle class="icon error" :size="20" />
           <div class="text">
-            <span class="title">Update failed</span>
+            <span class="title">Update Failed</span>
             <span class="subtitle">{{ updateError }}</span>
           </div>
-          <button class="action-btn retry" @click="downloadAndInstall">
+          <button class="retry-btn" @click="downloadAndInstall">
             <RefreshCw :size="14" />
-            Retry
           </button>
         </div>
       </template>
 
-      <!-- Downloading state -->
       <template v-else-if="isDownloading">
         <div class="notification-content">
           <Download class="icon downloading" :size="20" />
           <div class="text">
-            <span class="title">Downloading update...</span>
+            <span class="title">Updating...</span>
             <span class="subtitle">
-              {{ formatBytes(downloadProgress) }} / {{ formatBytes(downloadTotal) }} ({{
-                progressPercent
-              }}%)
+              {{ formatBytes(downloadProgress) }} / {{ formatBytes(downloadTotal) }}
             </span>
           </div>
+          <span class="percent">{{ progressPercent }}%</span>
         </div>
-        <div class="progress-bar">
+        <div class="progress-track">
           <div class="progress-fill" :style="{ width: `${progressPercent}%` }"></div>
         </div>
       </template>
 
-      <!-- Update available state -->
       <template v-else>
         <div class="notification-content">
           <Download class="icon" :size="20" />
           <div class="text">
-            <span class="title">Update available: v{{ updateInfo?.version }}</span>
+            <span class="title">New Version: v{{ updateInfo?.version }}</span>
             <span v-if="updateInfo?.body" class="subtitle"
-              >{{ updateInfo.body.slice(0, 100)
-              }}{{ updateInfo.body.length > 100 ? "..." : "" }}</span
+              >{{ updateInfo.body.slice(0, 80) }}{{ updateInfo.body.length > 80 ? "..." : "" }}</span
             >
           </div>
-          <button class="action-btn" @click="downloadAndInstall">Update Now</button>
+          <BaseButton variant="primary" size="sm" @click="downloadAndInstall">Update</BaseButton>
         </div>
       </template>
     </div>
   </Transition>
 </template>
 
-<script lang="ts">
-import { computed } from "vue";
-export default {
-  name: "UpdateNotification",
-};
-</script>
 
 <style scoped>
 .update-notification {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 16px 20px;
-  min-width: 320px;
-  max-width: 400px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  bottom: 24px;
+  right: 24px;
+  padding: 20px;
+  min-width: 340px;
+  max-width: 420px;
   z-index: 1000;
+  box-shadow: var(--shadow-xl);
 }
 
 .close-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  top: 10px;
+  right: 10px;
+  color: var(--text-muted);
   transition: all 0.2s;
 }
 
 .close-btn:hover:not(:disabled) {
-  background: var(--bg-tertiary);
   color: var(--text-primary);
-}
-
-.close-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
+  background: var(--bg-hover);
 }
 
 .notification-content {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
 }
 
 .icon {
   color: var(--accent-primary);
   flex-shrink: 0;
-  margin-top: 2px;
 }
 
-.icon.success {
-  color: #10b981;
-}
-
-.icon.error {
-  color: #ef4444;
-}
-
-.icon.downloading {
-  animation: pulse 1.5s ease-in-out infinite;
-}
+.icon.success { color: var(--accent-success); }
+.icon.error { color: var(--accent-error); }
+.icon.downloading { animation: pulse 1.5s infinite; }
 
 @keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.5;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .text {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
 .title {
-  font-weight: 600;
-  color: var(--text-primary);
+  font-weight: 700;
   font-size: 14px;
+  color: var(--text-primary);
 }
 
 .subtitle {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.4;
-}
-
-.action-btn {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   white-space: nowrap;
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.action-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+.percent {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-primary);
 }
 
-.action-btn.retry {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+.retry-btn {
+  padding: 6px;
+  color: var(--text-muted);
+  transition: all 0.2s;
 }
 
-.action-btn.retry:hover {
+.retry-btn:hover {
+  color: var(--accent-primary);
   background: var(--bg-hover);
-  box-shadow: none;
 }
 
-.progress-bar {
-  margin-top: 12px;
+.progress-track {
+  margin-top: 16px;
   height: 4px;
   background: var(--bg-tertiary);
   border-radius: 2px;
@@ -300,20 +245,10 @@ export default {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
-  border-radius: 2px;
-  transition: width 0.3s ease;
+  background: var(--accent-primary);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Transition animations */
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-  transform: translateX(100px);
-}
+.slide-enter-active, .slide-leave-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+.slide-enter-from, .slide-leave-to { opacity: 0; transform: translateX(40px) scale(0.95); }
 </style>

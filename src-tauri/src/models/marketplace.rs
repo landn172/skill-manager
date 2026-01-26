@@ -78,6 +78,23 @@ pub struct SkillsmpError {
     pub message: String,
 }
 
+// Skills.sh API Response types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillsShApiResponse {
+    pub skills: Vec<SkillsShSkill>,
+    #[serde(default, rename = "hasMore")]
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillsShSkill {
+    pub id: String,
+    pub name: String,
+    pub installs: u32,
+    #[serde(rename = "topSource")]
+    pub top_source: String, // "owner/repo" format
+}
+
 /// Default sources include only Official repos and the SkillsMP API
 pub fn default_sources() -> Vec<MarketplaceSource> {
     vec![
@@ -88,7 +105,18 @@ pub fn default_sources() -> Vec<MarketplaceSource> {
             url: "https://skillsmp.com/api/v1".into(),
             description: Some("Skills Marketplace API with 65,000+ indexed skills".into()),
             official: false,
-            enabled: true, // DEBUG: Enable by default
+            enabled: true,
+            last_fetched: None,
+            source_type: SourceType::Api,
+        },
+        // Skills.sh - Community skills leaderboard
+        MarketplaceSource {
+            id: "skillssh".into(),
+            name: "Skills.sh".into(),
+            url: "https://skills.sh/api/skills".into(),
+            description: Some("Skills leaderboard from skills.sh with install rankings".into()),
+            official: false,
+            enabled: true,
             last_fetched: None,
             source_type: SourceType::Api,
         },

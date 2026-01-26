@@ -4,6 +4,7 @@ import MainLayout from "@/components/layout/MainLayout.vue";
 import { useThemeStore } from "@/stores/theme";
 import OnboardingModal from "@/components/onboarding/OnboardingModal.vue";
 import UpdateNotification from "@/components/common/UpdateNotification.vue";
+import Toast from "@/components/common/Toast.vue";
 
 // Initialize theme
 useThemeStore();
@@ -29,6 +30,7 @@ function closeOnboarding() {
     <OnboardingModal :show="showOnboarding" @close="closeOnboarding" />
   </MainLayout>
   <UpdateNotification />
+  <Toast />
 </template>
 
 <style>

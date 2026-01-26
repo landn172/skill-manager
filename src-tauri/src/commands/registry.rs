@@ -92,6 +92,8 @@ pub async fn fetch_registry_skills(url: String) -> Result<Vec<MarketplaceSkill>,
                     description: s.description,
                     path: s.path,
                     version: None,
+                    source_id: Some("registry".to_string()),
+                    source_name: Some("Registry".to_string()),
                     metadata: HashMap::new(),
                 },
                 source_id: "registry".to_string(), // This will be overwritten by caller with actual source ID

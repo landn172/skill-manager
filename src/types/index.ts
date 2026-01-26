@@ -23,6 +23,8 @@ export interface Skill {
   description: string;
   path: string;
   version?: string;
+  source_id?: string;
+  source_name?: string;
   metadata?: Record<string, string>;
 }
 
@@ -52,8 +54,6 @@ export interface MarketplaceSource {
 }
 
 export interface MarketplaceSkill extends Skill {
-  source_id: string;
-  source_name: string;
   category?: string;
   tags: string[];
   // SkillsMP API fields

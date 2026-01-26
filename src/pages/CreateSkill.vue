@@ -4,7 +4,9 @@ import { useRouter, useRoute } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { homeDir } from "@tauri-apps/api/path";
-import { ChevronRight, Save, Folder, FileCode } from "lucide-vue-next";
+import { ChevronRight, Save, Folder, FileCode, ArrowLeft } from "lucide-vue-next";
+import PageHeader from "@/components/common/PageHeader.vue";
+import BaseButton from "@/components/common/BaseButton.vue";
 
 const router = useRouter();
 const route = useRoute();
@@ -17,16 +19,14 @@ const form = ref({
   parentPath: "",
 });
 
-// Edit mode: read from query params
 const isEditMode = computed(() => !!route.query.edit);
 const editSkillPath = computed(() => (route.query.path as string) || "");
 
 onMounted(() => {
-  // If editing, populate form from query params
   if (isEditMode.value) {
     form.value.name = (route.query.name as string) || "";
     form.value.description = (route.query.description as string) || "";
-    form.value.parentPath = editSkillPath.value; // Use skill path as parentPath for display
+    form.value.parentPath = editSkillPath.value;
   }
 });
 
@@ -50,16 +50,13 @@ async function handleSubmit() {
   creating.value = true;
   try {
     if (isEditMode.value) {
-      // Update existing skill
       await invoke("update_local_skill", {
         skillPath: editSkillPath.value,
         name: form.value.name || undefined,
         description: form.value.description || undefined,
       });
-      alert("Skill updated successfully!");
       router.push("/marketplace");
     } else {
-      // Create new skill
       const result = await invoke<{
         success: boolean;
         path: string;
@@ -71,7 +68,6 @@ async function handleSubmit() {
       });
 
       if (result.success) {
-        alert(`Skill created successfully at ${result.path}`);
         router.push("/installed");
       } else {
         throw new Error(result.message);
@@ -86,341 +82,299 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="create-skill-page">
-    <header class="header">
-      <h1>{{ isEditMode ? "Edit Skill" : "Create New Skill" }}</h1>
-      <div v-if="!isEditMode" class="steps">
-        <div class="step" :class="{ active: step >= 1 }">1</div>
-        <div class="step-line"></div>
-        <div class="step" :class="{ active: step >= 2 }">2</div>
+  <div class="create-page animate-fade-in">
+    <PageHeader 
+      :title="isEditMode ? 'Edit Skill' : 'Create New Skill'" 
+      :description="isEditMode ? 'Update the metadata for your local skill.' : 'Scaffold a new skill directory to start building.'"
+    />
+
+    <div class="stepper-wrap" v-if="!isEditMode">
+      <div class="step" :class="{ active: step >= 1 }">
+        <span class="num">1</span>
+        <span class="label">Information</span>
       </div>
-    </header>
-
-    <div class="form-container">
-      <div v-if="!isEditMode" class="intro-box">
-        <FileCode :size="24" class="intro-icon" />
-        <p>
-          Scaffold a new skill directory with a standard structure (README, Instructions) to start
-          building your own agent skill.
-        </p>
+      <div class="line" :class="{ active: step >= 2 }"></div>
+      <div class="step" :class="{ active: step >= 2 }">
+        <span class="num">2</span>
+        <span class="label">Location</span>
       </div>
-
-      <!-- Step 1: Basic Info -->
-      <section v-if="step === 1" class="form-step">
-        <h2>Basic Information</h2>
-        <div class="input-group">
-          <label>Skill Name</label>
-          <input v-model="form.name" placeholder="e.g. react-hook-generator" autofocus />
-          <span class="hint">This will be used as the folder name (kebab-case recommended).</span>
-        </div>
-        <div class="input-group">
-          <label>Description</label>
-          <textarea v-model="form.description" placeholder="What does this skill do?"></textarea>
-        </div>
-      </section>
-
-      <!-- Step 2: Location (only for Create mode) -->
-      <section v-if="step === 2 && !isEditMode" class="form-step">
-        <h2>Location</h2>
-        <div class="input-group">
-          <label>Parent Directory</label>
-          <div class="path-selector">
-            <input
-              v-model="form.parentPath"
-              placeholder="Select where to create the skill folder..."
-              readonly
-            />
-            <button class="btn secondary small" @click="selectParentPath">
-              <Folder :size="16" />
-              Browse
-            </button>
-          </div>
-          <span class="hint"
-            >A new folder named "{{ form.name || "skill-name" }}" will be created here.</span
-          >
-        </div>
-      </section>
     </div>
 
-    <footer class="footer">
-      <button v-if="step > 1 && !isEditMode" class="btn secondary" @click="step--">
-        <span>Back</span>
-      </button>
+    <div class="form-area">
+      <div v-if="!isEditMode && step === 1" class="promo-box glass">
+        <div class="icon-box">
+          <FileCode :size="20" />
+        </div>
+        <div class="text">
+          <h3>Standardized Scaffolding</h3>
+          <p>We'll create a <code>README.md</code>, <code>instructions.md</code>, and a <code>SKILL.md</code> for you.</p>
+        </div>
+      </div>
+
+      <!-- Step 1 Form -->
+      <div v-if="step === 1" class="form-glass glass-card animate-slide-up">
+        <div class="form-group">
+          <label>Skill Name</label>
+          <input 
+            v-model="form.name" 
+            placeholder="e.g. react-expert" 
+            class="styled-input"
+            autofocus 
+          />
+          <p class="hint">Recommended: lowercase kebab-case.</p>
+        </div>
+
+        <div class="form-group">
+          <label>Description</label>
+          <textarea 
+            v-model="form.description" 
+            placeholder="Tell us what this skill helps with..." 
+            class="styled-textarea"
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- Step 2 Form -->
+      <div v-if="step === 2 && !isEditMode" class="form-glass glass-card animate-slide-up">
+        <div class="form-group">
+          <label>Parent Directory</label>
+          <div class="path-row">
+            <input
+              v-model="form.parentPath"
+              placeholder="Select destination..."
+              class="styled-input"
+              readonly
+              @click="selectParentPath"
+            />
+            <BaseButton variant="outline" @click="selectParentPath">
+              <Folder :size="16" />
+              Browse
+            </BaseButton>
+          </div>
+          <p class="hint" v-if="form.name">
+            Skill will be created at: <code>{{ form.parentPath }}/{{ form.name }}</code>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <footer class="form-footer">
+      <BaseButton v-if="step > 1 && !isEditMode" variant="ghost" @click="step--">
+        <ArrowLeft :size="16" />
+        Back
+      </BaseButton>
       <div class="spacer"></div>
-      <button
+      
+      <BaseButton
         v-if="step < 2 && !isEditMode"
-        class="btn primary"
-        @click="step++"
+        variant="primary"
         :disabled="!form.name"
+        @click="step++"
       >
-        <span>Next</span>
+        Next Step
         <ChevronRight :size="18" />
-      </button>
-      <button
+      </BaseButton>
+      
+      <BaseButton
         v-else
-        class="btn primary"
-        @click="handleSubmit"
+        variant="primary"
         :disabled="(!isEditMode && !form.parentPath) || creating"
+        :loading="creating"
+        @click="handleSubmit"
       >
         <Save :size="18" />
-        <span>{{
-          creating
-            ? isEditMode
-              ? "Saving..."
-              : "Creating..."
-            : isEditMode
-              ? "Save Changes"
-              : "Create Skill"
-        }}</span>
-      </button>
+        {{ isEditMode ? 'Save Changes' : 'Generate Skill' }}
+      </BaseButton>
     </footer>
   </div>
 </template>
 
 <style scoped>
-.create-skill-page {
-  height: 100%;
+.create-page {
+  padding: 20px;
+  height: 100vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 32px;
-}
-
-.intro-box {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background-color: var(--bg-secondary);
-  padding: 16px;
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-  margin-bottom: 32px;
-  color: var(--text-secondary);
-}
-
-.intro-icon {
-  color: var(--accent-primary);
-}
-
-.steps {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.step {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background-color: var(--bg-tertiary);
-  color: var(--text-muted);
+.stepper-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  border: 1px solid var(--border-color);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  transition: all 0.3s;
 }
 
 .step.active {
-  background-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.step .num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid var(--border-color);
+}
+
+.step.active .num {
+  background: var(--accent-primary);
   color: white;
   border-color: var(--accent-primary);
 }
 
-.step-line {
-  width: 32px;
-  height: 2px;
-  background-color: var(--border-color);
+.step .label {
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.form-container {
+.stepper-wrap .line {
+  width: 60px;
+  height: 2px;
+  background: var(--border-color);
+}
+
+.stepper-wrap .line.active {
+  background: var(--accent-primary);
+}
+
+.form-area {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  max-width: 600px;
+  max-width: 640px;
   margin: 0 auto;
   width: 100%;
 }
 
-.form-step {
+.promo-box {
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  border: 1px solid var(--glass-border);
+}
+
+.promo-box .icon-box {
+  width: 40px;
+  height: 40px;
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--accent-primary);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.promo-box h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.promo-box p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.form-glass {
+  padding: 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;
-  animation: fadeIn 0.3s ease;
 }
 
-.form-step.full-height {
-  flex: 1;
-}
-
-h2 {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.input-group {
+.form-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-label {
-  font-size: 14px;
-  font-weight: 500;
+.form-group label {
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text-secondary);
 }
 
-input,
-textarea {
-  background-color: var(--bg-secondary);
+.styled-input {
+  background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
+  border-radius: 8px;
   padding: 12px 16px;
-  outline: none;
-  transition: border-color 0.2s;
   color: var(--text-primary);
   font-size: 14px;
+  transition: all 0.2s;
 }
 
-input:focus,
-textarea:focus {
+.styled-input:focus {
+  outline: none;
   border-color: var(--accent-primary);
+  background: var(--bg-primary);
 }
 
-textarea {
+.styled-textarea {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px 16px;
   min-height: 120px;
-  resize: vertical;
-}
-
-.content-editor {
-  flex: 1;
-  font-family: "Fira Code", monospace;
+  color: var(--text-primary);
   font-size: 14px;
   resize: none;
+  transition: all 0.2s;
 }
 
-.agent-selection {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.agent-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  cursor: pointer;
-}
-
-.agent-option.selected {
+.styled-textarea:focus {
+  outline: none;
   border-color: var(--accent-primary);
-  background-color: rgba(139, 92, 246, 0.05);
-}
-
-.agent-option.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.scope-options {
-  display: flex;
-  gap: 12px;
-}
-
-.scope-btn {
-  flex: 1;
-  padding: 12px;
-  border-radius: var(--border-radius);
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-}
-
-.scope-btn.active {
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  background-color: rgba(139, 92, 246, 0.05);
-}
-
-.path-selector {
-  display: flex;
-  gap: 8px;
+  background: var(--bg-primary);
 }
 
 .hint {
   font-size: 12px;
   color: var(--text-muted);
+  margin: 0;
 }
 
-.footer {
-  margin-top: 40px;
+.path-row {
   display: flex;
+  gap: 12px;
+}
+
+.form-footer {
+  max-width: 640px;
+  width: 100%;
+  margin: 40px auto 0;
+  display: flex;
+  align-items: center;
   padding-top: 24px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--glass-border);
 }
 
 .spacer {
   flex: 1;
 }
 
-.btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  border-radius: 10px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn.primary {
-  background-color: var(--accent-primary);
-  color: white;
-}
-
-.btn.primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
-.btn.secondary {
-  background-color: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.btn.secondary:hover {
-  background-color: var(--bg-hover);
-}
-
-.btn.small {
-  padding: 0 16px;
-  white-space: nowrap;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+code {
+  background: rgba(0,0,0,0.2);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
 }
 </style>

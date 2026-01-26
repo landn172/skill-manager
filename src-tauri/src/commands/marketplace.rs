@@ -1,9 +1,11 @@
 use crate::commands::registry::fetch_registry_skills;
 use crate::commands::skills::discover_skills;
 use crate::commands::skillsmp::fetch_skillsmp_skills;
+use crate::commands::skillssh::fetch_skillssh_skills;
 use crate::models::marketplace::{
     default_sources, MarketplaceSkill, MarketplaceSource, SourceType,
 };
+use crate::models::skill::Skill;
 use crate::utils::git::{clone_repo, parse_source};
 use tokio::fs;
 
@@ -156,12 +158,22 @@ pub async fn fetch_marketplace_skills(
 
         match source.source_type {
             SourceType::Api => {
-                // Fetch from SkillsMP API
-                match fetch_skillsmp_skills(None, Some(1), Some(50), Some("stars".into())).await {
-                    Ok(skills) => all_skills.extend(skills),
-                    Err(e) => {
-                        println!("Failed to fetch from SkillsMP API: {}", e);
-                        // Continue with other sources rather than failing entirely
+                // Fetch based on source ID
+                if source.id == "skillsmp" {
+                    match fetch_skillsmp_skills(None, Some(1), Some(50), Some("stars".into())).await
+                    {
+                        Ok(skills) => all_skills.extend(skills),
+                        Err(e) => {
+                            println!("Failed to fetch from SkillsMP API: {}", e);
+                            // Continue with other sources rather than failing entirely
+                        }
+                    }
+                } else if source.id == "skillssh" {
+                    match fetch_skillssh_skills().await {
+                        Ok(skills) => all_skills.extend(skills),
+                        Err(e) => {
+                            println!("Failed to fetch from Skills.sh API: {}", e);
+                        }
                     }
                 }
             }
@@ -196,6 +208,49 @@ pub async fn fetch_marketplace_skills(
     }
 
     Ok(all_skills)
+}
+
+#[tauri::command]
+pub async fn discover_skills_from_url(url: String) -> Result<Vec<MarketplaceSkill>, String> {
+    // Determine source type (Git or Local)
+    let is_local = std::path::Path::new(&url).exists();
+    let source_type = if is_local {
+        SourceType::Local
+    } else {
+        SourceType::Git
+    };
+
+    let id = if is_local {
+        "local_discovery".to_string()
+    } else {
+        url.split('/')
+            .last()
+            .unwrap_or("repo")
+            .replace(".git", "")
+            .to_lowercase()
+    };
+
+    let source = MarketplaceSource {
+        id,
+        name: "URL Discovery".into(),
+        url,
+        description: None,
+        official: false,
+        enabled: true,
+        last_fetched: None,
+        source_type,
+    };
+
+    let cache_dir = dirs::cache_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("gemini-skills-cache");
+    let repos_dir = cache_dir.join("temp_repos");
+    fs::create_dir_all(&repos_dir)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let skills = fetch_git_source(&source, &cache_dir, &repos_dir, true).await;
+    Ok(skills)
 }
 
 /// Fetch skills from a Git or Local source
@@ -287,8 +342,41 @@ async fn fetch_git_source(
                 None
             };
 
+            let mut skill = skill;
+            if let Some(url) = &skill_repo_url {
+                skill.metadata.insert("repo_url".into(), url.clone());
+                skill.metadata.insert("repo".into(), url.clone());
+
+                // Calculate and add subpath for accurate installation
+                let search_base_path = std::path::Path::new(&search_path);
+                let skill_dir_path = std::path::Path::new(&skill.path);
+                if let Ok(rel_path) = skill_dir_path.strip_prefix(search_base_path) {
+                    let mut final_subpath = rel_path.to_string_lossy().to_string();
+                    // If the source URL already had a subpath, prepend it
+                    if let Some(sp) = &subpath {
+                        final_subpath = format!("{}/{}", sp, final_subpath)
+                            .trim_matches('/')
+                            .to_string();
+                    }
+                    if !final_subpath.is_empty() {
+                        skill.metadata.insert("subpath".into(), final_subpath);
+                    }
+                } else if let Some(sp) = &subpath {
+                    // Source had a subpath but skill is at the root of that subpath
+                    skill.metadata.insert("subpath".into(), sp.clone());
+                }
+            }
+
             source_skills.push(MarketplaceSkill {
-                skill,
+                skill: Skill {
+                    name: skill.name,
+                    description: skill.description,
+                    path: skill.path,
+                    version: skill.version,
+                    source_id: Some(source.id.clone()),
+                    source_name: Some(source.name.clone()),
+                    metadata: skill.metadata,
+                },
                 source_id: source.id.clone(),
                 source_name: source.name.clone(),
                 category: None,

@@ -211,13 +211,21 @@ fn convert_skillsmp_skills(skills: Vec<SkillsmpSkill>) -> Vec<MarketplaceSkill> 
             let description = s.description.clone().unwrap_or_default();
             let path = s.url.clone().unwrap_or_default();
 
+            let mut metadata = HashMap::new();
+            if let Some(r) = &s.repo {
+                metadata.insert("repo".into(), r.clone());
+                metadata.insert("repo_url".into(), format!("https://github.com/{}", r));
+            }
+
             MarketplaceSkill {
                 skill: Skill {
                     name,
                     description,
                     path,
                     version: None,
-                    metadata: HashMap::new(),
+                    source_id: Some("skillsmp".into()),
+                    source_name: Some("SkillsMP".into()),
+                    metadata,
                 },
                 source_id: "skillsmp".into(),
                 source_name: "SkillsMP".into(),

@@ -3,7 +3,8 @@ import { ref, computed } from "vue";
 import Modal from "@/components/common/Modal.vue";
 import { useAgentsStore } from "@/stores/agents";
 import AgentIcon from "@/components/icons/AgentIcon.vue";
-import { CheckCircle2, XCircle, Rocket, ArrowRight } from "lucide-vue-next";
+import { CheckCircle2, Rocket, ArrowRight } from "lucide-vue-next";
+import BaseButton from "@/components/common/BaseButton.vue";
 
 defineProps<{
   show: boolean;
@@ -40,25 +41,25 @@ const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.i
   <Modal :show="show" title="Welcome to Skill Manager" :maxWidth="'600px'" @close="() => {}">
     <div class="onboarding-content">
       <!-- Step 1: Welcome -->
-      <div v-if="step === 1" class="step step-1">
-        <div class="hero-icon">
-          <Rocket :size="64" />
+      <div v-if="step === 1" class="step step-1 animate-slide-up">
+        <div class="hero-icon glass">
+          <Rocket :size="48" />
         </div>
         <h2>Supercharge your AI Agents</h2>
         <p>
-          Skill Manager helps you discover, install, and manage skills for your favorite coding
+          Discover, install, and manage skills for your favorite coding
           assistants like Cursor, Claude Code, and more.
         </p>
         <div class="features-list">
-          <div class="feature-item">
+          <div class="feature-item glass-card">
             <CheckCircle2 class="feature-icon" />
             <span>Browse 65,000+ skills from SkillsMP</span>
           </div>
-          <div class="feature-item">
+          <div class="feature-item glass-card">
             <CheckCircle2 class="feature-icon" />
             <span>One-click install to multiple agents</span>
           </div>
-          <div class="feature-item">
+          <div class="feature-item glass-card">
             <CheckCircle2 class="feature-icon" />
             <span>Manage local and Git-based skills</span>
           </div>
@@ -66,62 +67,64 @@ const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.i
       </div>
 
       <!-- Step 2: Agents -->
-      <div v-if="step === 2" class="step step-2">
-        <h2>Detecting Agents</h2>
-        <p>We're scanning your system for supported AI agents...</p>
-
-        <div v-if="agentsStore.loading" class="loader-container">
-          <div class="loader"></div>
-          <span>Scanning...</span>
+      <div v-if="step === 2" class="step step-2 animate-slide-up">
+        <div class="scan-header">
+          <h2>Detecting Agents</h2>
+          <p>Scanning your system for supported AI tools...</p>
         </div>
 
-        <div v-else class="agents-results">
+        <div v-if="agentsStore.loading" class="loader-wrap">
+          <div class="loader"></div>
+          <p>Searching globally...</p>
+        </div>
+
+        <div v-else class="results-grid">
           <div
             v-for="agent in agentsStore.agents"
             :key="agent.agent_type"
-            class="agent-card"
-            :class="{ installed: agent.installed }"
+            class="res-card glass-card"
+            :class="{ active: agent.installed }"
           >
-            <AgentIcon :type="agentsStore.getIcon(agent.agent_type)" :size="32" />
-            <div class="agent-info">
-              <span class="agent-name">{{ agent.display_name }}</span>
-              <span class="agent-status">
-                {{ agent.installed ? "Detected" : "Not Found" }}
-              </span>
+            <div class="icon-wrap">
+              <AgentIcon :type="agentsStore.getIcon(agent.agent_type)" :size="24" />
             </div>
-            <CheckCircle2 v-if="agent.installed" class="status-icon success" />
-            <XCircle v-else class="status-icon info" />
+            <div class="info">
+              <span class="name">{{ agent.display_name }}</span>
+              <span class="status">{{ agent.installed ? 'Detected' : 'Not Found' }}</span>
+            </div>
+            <div class="check" v-if="agent.installed">
+              <CheckCircle2 :size="16" />
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Step 3: Finish -->
-      <div v-if="step === 3" class="step step-3">
-        <div class="hero-icon success">
-          <CheckCircle2 :size="64" />
+      <div v-if="step === 3" class="step step-3 animate-slide-up">
+        <div class="hero-icon success glass">
+          <CheckCircle2 :size="48" />
         </div>
-        <h2>All Set!</h2>
+        <h2>All Systems Go!</h2>
         <p>
-          We detected <strong>{{ installedAgentsCount }}</strong> agents on your system. You're
-          ready to start exploring the marketplace.
+          Found <strong>{{ installedAgentsCount }}</strong> agents. You're ready to explore the marketplace and boost your productivity.
         </p>
       </div>
     </div>
 
     <template #footer>
-      <div class="footer-actions">
-        <div class="step-dots">
-          <span
-            v-for="s in steps"
-            :key="s.id"
-            class="dot"
+      <div class="footer-wrap">
+        <div class="indicators">
+          <div 
+            v-for="s in steps" 
+            :key="s.id" 
+            class="ind" 
             :class="{ active: step === s.id }"
-          ></span>
+          ></div>
         </div>
-        <button class="btn-primary" @click="nextStep">
-          <span>{{ step === 3 ? "Get Started" : "Continue" }}</span>
+        <BaseButton variant="primary" @click="nextStep">
+          {{ step === 3 ? "Explore Now" : "Continue" }}
           <ArrowRight v-if="step < 3" :size="16" />
-        </button>
+        </BaseButton>
       </div>
     </template>
   </Modal>
@@ -130,22 +133,19 @@ const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.i
 <style scoped>
 .onboarding-content {
   text-align: center;
-  padding: 10px 0;
 }
 
 .step {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  animation: fadeIn 0.3s ease;
+  gap: 20px;
 }
 
 .hero-icon {
   width: 96px;
   height: 96px;
-  background-color: rgba(139, 92, 246, 0.1);
-  border-radius: 50%;
+  border-radius: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -154,20 +154,22 @@ const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.i
 }
 
 .hero-icon.success {
-  background-color: rgba(34, 197, 94, 0.1);
   color: var(--accent-success);
 }
 
 h2 {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 26px;
+  font-weight: 800;
   margin: 0;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 p {
   color: var(--text-secondary);
   line-height: 1.6;
-  max-width: 400px;
+  max-width: 440px;
   margin: 0;
 }
 
@@ -175,155 +177,124 @@ p {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 16px;
-  text-align: left;
+  width: 100%;
+  margin-top: 8px;
 }
 
 .feature-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  color: var(--text-primary);
+  gap: 16px;
+  padding: 14px 20px;
+  text-align: left;
 }
 
 .feature-icon {
   color: var(--accent-primary);
-  width: 20px;
-  height: 20px;
+  flex-shrink: 0;
 }
 
-/* Step 2 Styles */
-.loader-container {
+/* Step 2 */
+.scan-header {
+  margin-bottom: 8px;
+}
+
+.loader-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  margin: 32px 0;
-  color: var(--text-muted);
+  padding: 40px 0;
 }
 
 .loader {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border: 3px solid var(--border-color);
-  border-radius: 50%;
   border-top-color: var(--accent-primary);
-  animation: spin 1s ease-in-out infinite;
+  border-radius: 50%;
+  animation: spin 1s infinite linear;
 }
 
-.agents-results {
+.results-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
   width: 100%;
-  margin-top: 16px;
 }
 
-.agent-card {
+.res-card {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  opacity: 0.6;
+  padding: 12px 16px;
+  opacity: 0.5;
+  transition: all 0.3s;
 }
 
-.agent-card.installed {
+.res-card.active {
   opacity: 1;
   border-color: var(--accent-primary);
-  background-color: rgba(139, 92, 246, 0.05);
 }
 
-.agent-info {
+.res-card .icon-wrap {
+  width: 36px;
+  height: 36px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.res-card .info {
   flex: 1;
+  text-align: left;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
 }
 
-.agent-name {
-  font-weight: 600;
+.res-card .name {
+  font-weight: 700;
   font-size: 14px;
 }
 
-.agent-status {
-  font-size: 12px;
+.res-card .status {
+  font-size: 11px;
   color: var(--text-muted);
 }
 
-.status-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.status-icon.success {
+.res-card .check {
   color: var(--accent-success);
 }
 
-.status-icon.info {
-  color: var(--text-muted);
-}
-
 /* Footer */
-.footer-actions {
+.footer-wrap {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
 }
 
-.step-dots {
+.indicators {
   display: flex;
   gap: 8px;
 }
 
-.dot {
+.ind {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  background-color: var(--border-color);
+  border-radius: 4px;
+  background: var(--border-color);
   transition: all 0.3s;
 }
 
-.dot.active {
-  background-color: var(--accent-primary);
-  width: 16px;
-  border-radius: 4px;
-}
-
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  background-color: var(--accent-primary);
-  color: white;
-  border-radius: var(--border-radius);
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.btn-primary:hover {
-  filter: brightness(1.1);
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.ind.active {
+  width: 24px;
+  background: var(--accent-primary);
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 </style>

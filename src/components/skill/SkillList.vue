@@ -40,7 +40,10 @@ const canInstallMore = (skill: InstalledSkill) => {
   <div class="skill-list">
     <div v-for="skill in skills" :key="skill.name" class="skill-row">
       <div class="skill-main">
-        <h3 class="skill-name">{{ skill.name }}</h3>
+        <h3 class="skill-name">
+          {{ skill.name }}
+          <span class="source-badge" v-if="skill.source">{{ skill.source }}</span>
+        </h3>
         <p class="skill-desc">{{ skill.description }}</p>
 
         <div class="installed-agents">
@@ -67,7 +70,12 @@ const canInstallMore = (skill: InstalledSkill) => {
           <PlusCircle :size="18" />
         </button>
 
-        <button class="action-btn edit" @click="emit('edit', skill)" title="Edit SKILL.md">
+        <button 
+          v-if="skill.source === 'Local'" 
+          class="action-btn edit" 
+          @click="emit('edit', skill)" 
+          title="Edit SKILL.md/README.md"
+        >
           <Pencil :size="18" />
         </button>
         <button class="action-btn delete" @click="emit('uninstall', skill)" title="Uninstall">
@@ -108,6 +116,19 @@ const canInstallMore = (skill: InstalledSkill) => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
 
 .skill-desc {

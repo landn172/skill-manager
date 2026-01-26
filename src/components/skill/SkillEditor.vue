@@ -15,15 +15,18 @@ const emit = defineEmits<{
 
 const content = ref("");
 const originalContent = ref("");
+const filename = ref("SKILL.md");
 const loading = ref(true);
 const saving = ref(false);
 const viewMode = ref<"edit" | "preview">("edit");
 
 onMounted(async () => {
   try {
-    content.value = await invoke("get_skill_content", {
+    const result = await invoke<{ content: string; filename: string }>("get_skill_content", {
       skillPath: props.skillPath,
     });
+    content.value = result.content;
+    filename.value = result.filename;
     originalContent.value = content.value;
   } catch (e) {
     alert(`Failed to load skill content: ${e}`);
@@ -38,6 +41,7 @@ async function handleSave() {
     await invoke("save_skill_content", {
       skillPath: props.skillPath,
       content: content.value,
+      filename: filename.value,
     });
     originalContent.value = content.value;
     emit("save");
@@ -57,7 +61,7 @@ const hasChanges = computed(() => content.value !== originalContent.value);
     <header class="editor-header">
       <div class="editor-title">
         <span class="skill-name">{{ skillName }}</span>
-        <span class="file-path">SKILL.md</span>
+        <span class="file-path">{{ filename }}</span>
         <span v-if="hasChanges" class="unsaved-dot"></span>
       </div>
 

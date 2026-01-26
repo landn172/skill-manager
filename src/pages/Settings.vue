@@ -17,16 +17,19 @@ import {
   Monitor,
   Palette,
   Download,
-  Upload,
   Edit2,
 } from "lucide-vue-next";
 import { useThemeStore } from "@/stores/theme";
 import AgentIcon from "@/components/icons/AgentIcon.vue";
 import { useProjectStore } from "@/stores/project";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { homeDir } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { writeTextFile, readTextFile, readFile } from "@tauri-apps/plugin-fs";
+import PageHeader from "@/components/common/PageHeader.vue";
+import BaseButton from "@/components/common/BaseButton.vue";
+import Modal from "@/components/common/Modal.vue";
 
 const agentsStore = useAgentsStore();
 const marketplaceStore = useMarketplaceStore();
@@ -38,6 +41,7 @@ const apiKeyInput = ref("");
 const maskedApiKey = ref<string | null>(null);
 const apiKeySource = ref<string | null>(null); // 'env' or 'db'
 const savingApiKey = ref(false);
+const isEditingApiKey = ref(false);
 
 const hasApiKey = computed(() => !!maskedApiKey.value);
 const isFromEnv = computed(() => apiKeySource.value === "env");
@@ -51,6 +55,17 @@ async function loadApiKey() {
   }
 }
 
+async function startEditingApiKey() {
+  try {
+    const fullKey = await invoke<string | null>("get_skillsmp_api_key");
+    apiKeyInput.value = fullKey || "";
+    isEditingApiKey.value = true;
+  } catch (e) {
+    console.error("Failed to fetch full API key", e);
+    isEditingApiKey.value = true;
+  }
+}
+
 async function saveApiKey() {
   if (!apiKeyInput.value.trim()) return;
 
@@ -58,8 +73,8 @@ async function saveApiKey() {
   try {
     await invoke("set_skillsmp_api_key", { key: apiKeyInput.value.trim() });
     apiKeyInput.value = "";
+    isEditingApiKey.value = false;
     await loadApiKey();
-    alert("API key saved successfully!");
   } catch (e) {
     alert(`Failed to save API key: ${e}`);
   } finally {
@@ -81,7 +96,6 @@ async function saveRegistrySource() {
     showAddRegistryModal.value = false;
     registryUrl.value = "";
     registryName.value = "";
-    alert("Registry source added successfully!");
   } catch (e) {
     alert(`Failed to add registry source: ${e}`);
   } finally {
@@ -112,12 +126,7 @@ async function clearApiKey() {
 
   try {
     await invoke("clear_skillsmp_api_key");
-    await loadApiKey(); // Reload to check if still exists in .env
-    if (!hasApiKey.value) {
-      alert("API key removed.");
-    } else {
-      alert("Database key removed. Key from .env is still active.");
-    }
+    await loadApiKey();
   } catch (e) {
     alert(`Failed to clear API key: ${e}`);
   }
@@ -142,9 +151,7 @@ async function handleClearCache() {
 
   clearingCache.value = true;
   try {
-    const message = await invoke<string>("clear_cache");
-    alert(message);
-    // Optionally refresh marketplace store if needed
+    await invoke<string>("clear_cache");
     await marketplaceStore.fetchSources();
   } catch (e) {
     alert(`Failed to clear cache: ${e}`);
@@ -153,9 +160,18 @@ async function handleClearCache() {
   }
 }
 
+async function handleOpenUrl(url: string) {
+  try {
+    await openUrl(url);
+  } catch (e) {
+    console.error("Failed to open URL", e);
+    window.open(url, "_blank");
+  }
+}
+
 const handleAddProject = async () => {
   try {
-    const selected = await open({
+    const selected = await openDialog({
       directory: true,
       multiple: false,
       defaultPath: await homeDir(),
@@ -172,7 +188,7 @@ const handleAddProject = async () => {
 
 async function handleAddLocalSource() {
   try {
-    const selected = await open({
+    const selected = await openDialog({
       directory: true,
       multiple: false,
       defaultPath: await homeDir(),
@@ -180,16 +196,8 @@ async function handleAddLocalSource() {
 
     if (selected && typeof selected === "string") {
       const name = selected.split("/").pop() || "Local Skills";
-      // Prompt for name (optional, could use a modal but prompt is simple for now)
-      // Since window.prompt might be blocked or ugly, let's just use directory name for now
-      // or repurpose the registry modal?
-      // Let's just use directory name + "(Local)" to start, can be improved.
-      // Actually, let's use a browser prompt if possible or just auto-add.
-      // Auto-add is smoothest.
-
       await marketplaceStore.addSource(selected, name, "local");
-      alert(`Added local source: ${name}`);
-      await marketplaceStore.fetchSkills(); // Refresh skills to show new ones
+      await marketplaceStore.fetchSkills();
     }
   } catch (e) {
     alert(`Failed to add local source: ${e}`);
@@ -199,14 +207,13 @@ async function handleAddLocalSource() {
 async function handleExportConfig() {
   try {
     const json = await invoke<string>("export_config");
-    const filePath = await save({
+    const filePath = await saveDialog({
       filters: [{ name: "JSON", extensions: ["json"] }],
       defaultPath: "skill-manager-config.json",
     });
 
     if (filePath) {
       await writeTextFile(filePath, json);
-      alert("Configuration exported successfully!");
     }
   } catch (e) {
     alert(`Failed to export config: ${e}`);
@@ -215,7 +222,7 @@ async function handleExportConfig() {
 
 async function handleImportConfig() {
   try {
-    const filePath = await open({
+    const filePath = await openDialog({
       filters: [{ name: "JSON", extensions: ["json"] }],
       multiple: false,
     });
@@ -223,7 +230,6 @@ async function handleImportConfig() {
     if (filePath && typeof filePath === "string") {
       const json = await readTextFile(filePath);
       await invoke("import_config", { json });
-      alert("Configuration imported successfully! refreshing...");
       marketplaceStore.fetchSources();
     }
   } catch (e) {
@@ -251,11 +257,9 @@ async function saveAgentPath() {
       path: editAgentPath.value,
     });
 
-    // Refresh agents
     await agentsStore.fetchAgents();
     editingAgent.value = null;
     editAgentPath.value = "";
-    alert("Agent path updated!");
   } catch (e) {
     alert(`Failed to update agent path: ${e}`);
   } finally {
@@ -265,7 +269,7 @@ async function saveAgentPath() {
 
 async function browseForAgentPath() {
   try {
-    const selected = await open({
+    const selected = await openDialog({
       directory: true,
       multiple: false,
       defaultPath: await homeDir(),
@@ -289,7 +293,7 @@ const addingAgent = ref(false);
 
 async function pickIconImage() {
   try {
-    const selected = await open({
+    const selected = await openDialog({
       multiple: false,
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "webp"] }],
     });
@@ -324,7 +328,6 @@ async function addCustomAgent() {
     newAgentPath.value = "";
     newAgentIcon.value = "🚀";
     newAgentIconType.value = "emoji";
-    alert("Custom agent added!");
   } catch (e) {
     alert(`Failed to add agent: ${e}`);
   } finally {
@@ -347,7 +350,7 @@ async function removeCustomAgent(agent: any) {
 
 async function browseForNewAgentPath() {
   try {
-    const selected = await open({
+    const selected = await openDialog({
       directory: true,
       multiple: false,
       defaultPath: await homeDir(),
@@ -363,662 +366,806 @@ async function browseForNewAgentPath() {
 </script>
 
 <template>
-  <div class="settings-page">
-    <header class="header">
-      <h1>Settings</h1>
-    </header>
+  <div class="settings-page animate-fade-in">
+    <PageHeader title="Settings" description="Customize application behavior and manage configurations." />
 
     <div class="sections">
       <!-- Appearance Section -->
-      <section class="settings-section">
-        <div class="section-header">
-          <Palette :size="20" class="section-icon" />
+      <section class="section">
+        <div class="section-title">
+          <Palette :size="20" class="icon" />
           <h2>App Appearance</h2>
         </div>
-        <p class="section-desc">Customize the look and feel of the application.</p>
+        <p class="section-hint">Choose between light, dark, or system-preferred theme.</p>
 
-        <div class="theme-selector">
+        <div class="theme-picker glass">
           <button
-            class="theme-btn"
+            class="theme-opt"
             :class="{ active: themeStore.theme === 'light' }"
             @click="themeStore.setTheme('light')"
           >
-            <Sun :size="18" />
+            <Sun :size="16" />
             <span>Light</span>
           </button>
           <button
-            class="theme-btn"
+            class="theme-opt"
             :class="{ active: themeStore.theme === 'dark' }"
             @click="themeStore.setTheme('dark')"
           >
-            <Moon :size="18" />
+            <Moon :size="16" />
             <span>Dark</span>
           </button>
           <button
-            class="theme-btn"
+            class="theme-opt"
             :class="{ active: themeStore.theme === 'system' }"
             @click="themeStore.setTheme('system')"
           >
-            <Monitor :size="18" />
+            <Monitor :size="16" />
             <span>System</span>
           </button>
         </div>
       </section>
 
       <!-- API Configuration Section -->
-      <section class="settings-section">
-        <div class="section-header">
-          <Key :size="20" class="section-icon" />
+      <section class="section">
+        <div class="section-title">
+          <Key :size="20" class="icon" />
           <h2>SkillsMP API</h2>
         </div>
-        <p class="section-desc">
-          Configure your SkillsMP API key to access 65,000+ skills from the marketplace.
+        <p class="section-hint">
+          Configure your SkillsMP API key to discover over 65,000 skills.
         </p>
 
-        <div class="api-config">
-          <div v-if="hasApiKey" class="api-key-display">
-            <div class="key-info">
-              <span class="key-label">Current API Key:</span>
-              <code class="key-value">{{ maskedApiKey }}</code>
-              <span v-if="isFromEnv" class="env-badge">from .env</span>
-              <span v-else class="db-badge">from Settings</span>
+        <div class="glass-card api-box">
+          <div v-if="hasApiKey && !isEditingApiKey" class="api-status">
+            <div class="key-container">
+              <span class="label">Current API Key</span>
+              <div class="key-wrap">
+                <code class="key-value">{{ maskedApiKey }}</code>
+                <span :class="isFromEnv ? 'env-badge' : 'db-badge'">
+                  {{ isFromEnv ? "via .env" : "via Database" }}
+                </span>
+              </div>
             </div>
-            <button v-if="!isFromEnv" class="btn-danger" @click="clearApiKey">
-              <Trash2 :size="16" />
-              Remove Key
-            </button>
+            
+            <div class="api-actions">
+              <BaseButton v-if="!isFromEnv" variant="outline" size="sm" @click="startEditingApiKey">
+                <Edit2 :size="14" />
+                Change Key
+              </BaseButton>
+              <BaseButton v-if="!isFromEnv" variant="danger" size="sm" @click="clearApiKey">
+                <Trash2 :size="14" />
+                Remove
+              </BaseButton>
+            </div>
           </div>
 
-          <div v-else class="api-key-input">
-            <input
-              v-model="apiKeyInput"
-              type="password"
-              placeholder="Enter your SkillsMP API key (sk_live_...)"
-              class="input-field"
-            />
-            <button
-              class="btn-primary"
-              :disabled="!apiKeyInput.trim() || savingApiKey"
-              @click="saveApiKey"
-            >
-              {{ savingApiKey ? "Saving..." : "Save Key" }}
-            </button>
+          <div v-else class="api-input-wrap">
+            <div class="input-header" v-if="isEditingApiKey">
+              <span class="label">Edit API Key</span>
+              <button class="cancel-link" @click="isEditingApiKey = false">Cancel</button>
+            </div>
+            <div class="input-row">
+              <input
+                v-model="apiKeyInput"
+                type="password"
+                placeholder="Paste your sk_live_... key here"
+                class="styled-input"
+              />
+              <BaseButton
+                variant="primary"
+                :disabled="!apiKeyInput.trim() || savingApiKey"
+                :loading="savingApiKey"
+                @click="saveApiKey"
+              >
+                {{ isEditingApiKey ? 'Update Key' : 'Save Key' }}
+              </BaseButton>
+            </div>
           </div>
 
-          <a href="https://skillsmp.com" target="_blank" class="get-key-link">
-            <ExternalLink :size="14" />
-            Get your API key from skillsmp.com
+          <a href="#" class="external-link" @click.prevent="handleOpenUrl('https://skillsmp.com/docs/api')">
+            <ExternalLink :size="12" />
+            Get your API key at skillsmp.com
           </a>
         </div>
       </section>
 
-      <section class="settings-section">
-        <div class="section-header">
-          <ShieldCheck :size="20" class="section-icon" />
+      <!-- Agents Section -->
+      <section class="section">
+        <div class="section-title">
+          <ShieldCheck :size="20" class="icon" />
           <h2>Detected Agents</h2>
         </div>
-        <p class="section-desc">We automatically detect installed coding agents on your system.</p>
+        <p class="section-hint">Manage the IDEs and tools where skills can be installed.</p>
 
-        <div class="agents-list">
-          <div v-for="agent in agentsStore.agents" :key="agent.name" class="agent-card">
-            <div class="agent-info">
-              <div class="agent-icon-wrap">
-                <AgentIcon :type="agentsStore.getIcon(agent.agent_type)" :size="24" />
+        <div class="list-container">
+          <div v-for="agent in agentsStore.agents" :key="agent.name" class="item-card glass-card">
+            <div class="item-info">
+              <div class="item-icon-box">
+                <AgentIcon :type="agentsStore.getIcon(agent.agent_type)" :size="20" />
               </div>
-              <div class="agent-details">
-                <span class="agent-name">{{ agent.display_name }}</span>
-                <span class="agent-path">{{ agent.global_skills_dir }}</span>
+              <div class="item-text">
+                <span class="item-name">{{ agent.display_name }}</span>
+                <span class="item-subtext">{{ agent.global_skills_dir }}</span>
               </div>
             </div>
-            <div class="agent-status" :class="{ installed: agent.installed }">
-              <template v-if="agent.installed">
-                <CheckCircle2 :size="16" />
-                <span>Detected</span>
-              </template>
-              <template v-else>
-                <XCircle :size="16" />
-                <span>Not Found</span>
-              </template>
+            
+            <div class="item-actions">
+              <div class="status-indicator" :class="{ detected: agent.installed }">
+                <CheckCircle2 v-if="agent.installed" :size="14" />
+                <XCircle v-else :size="14" />
+                <span>{{ agent.installed ? 'Detected' : 'Missing' }}</span>
+              </div>
+              
+              <BaseButton variant="ghost" size="icon" @click="openEditAgent(agent)" title="Edit Directory">
+                <Edit2 :size="16" />
+              </BaseButton>
+              
+              <BaseButton
+                v-if="agent.is_custom"
+                variant="ghost"
+                size="icon"
+                class="danger-ghost"
+                @click="removeCustomAgent(agent)"
+                title="Remove Custom Agent"
+              >
+                <Trash2 :size="16" />
+              </BaseButton>
             </div>
-            <!-- Add Edit Button -->
-            <button class="icon-btn edit-agent" @click="openEditAgent(agent)" title="Edit Path">
-              <Edit2 :size="16" />
-            </button>
-            <button
-              v-if="agent.is_custom"
-              class="icon-btn delete-agent"
-              @click="removeCustomAgent(agent)"
-              title="Remove Agent"
-            >
-              <Trash2 :size="16" />
-            </button>
           </div>
-        </div>
-
-        <div class="agents-actions">
-          <button class="add-btn" @click="showAddAgentModal = true">
+          
+          <BaseButton variant="outline" class="w-full dashed" @click="showAddAgentModal = true">
             <Plus :size="18" />
-            <span>Add Custom Agent</span>
-          </button>
+            Add Custom Agent
+          </BaseButton>
         </div>
       </section>
 
-      <!-- Add Agent Modal -->
-      <div v-if="showAddAgentModal" class="modal-overlay">
-        <div class="modal-content">
-          <h3>Add Custom Agent</h3>
-          <p>Add a new IDE or tool to the list.</p>
-
-          <div class="form-group">
-            <label>Agent Name</label>
-            <input v-model="newAgentName" placeholder="e.g. My IDE" class="input-field" />
-          </div>
-
-          <div class="form-group">
-            <label>Icon</label>
-            <div class="icon-selector-wrap">
-              <div class="icon-type-toggle">
-                <button
-                  class="toggle-btn"
-                  :class="{ active: newAgentIconType === 'emoji' }"
-                  @click="newAgentIconType = 'emoji'"
-                >
-                  Emoji
-                </button>
-                <button
-                  class="toggle-btn"
-                  :class="{ active: newAgentIconType === 'image' }"
-                  @click="newAgentIconType = 'image'"
-                >
-                  Image
-                </button>
-              </div>
-
-              <div class="icon-input-row">
-                <div class="icon-preview">
-                  <AgentIcon :type="newAgentIcon" :size="32" />
-                </div>
-                <template v-if="newAgentIconType === 'emoji'">
-                  <input
-                    v-model="newAgentIcon"
-                    placeholder="Emoji (e.g. 🚀)"
-                    class="input-field icon-input"
-                    maxlength="8"
-                  />
-                </template>
-                <template v-else>
-                  <button class="btn-secondary" @click="pickIconImage">
-                    {{ newAgentIcon.startsWith("data:") ? "Change Image" : "Select Image" }}
-                  </button>
-                </template>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Skills Directory Path</label>
-            <div class="input-row">
-              <input v-model="newAgentPath" class="input-field" />
-              <button class="btn-secondary" @click="browseForNewAgentPath">Browse</button>
-            </div>
-          </div>
-
-          <div class="modal-actions">
-            <button class="btn-secondary" @click="showAddAgentModal = false">Cancel</button>
-            <button
-              class="btn-primary"
-              :disabled="!newAgentName || !newAgentPath || addingAgent"
-              @click="addCustomAgent"
-            >
-              {{ addingAgent ? "Adding..." : "Add Agent" }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Edit Agent Modal -->
-      <div v-if="editingAgent" class="modal-overlay">
-        <div class="modal-content">
-          <h3>Edit {{ editingAgent.display_name }} Path</h3>
-          <p>Manually set the skills directory for this agent.</p>
-
-          <div class="form-group">
-            <label>Skills Directory Path</label>
-            <div class="input-row">
-              <input v-model="editAgentPath" class="input-field" />
-              <button class="btn-secondary" @click="browseForAgentPath">Browse</button>
-            </div>
-          </div>
-
-          <div class="modal-actions">
-            <button class="btn-secondary" @click="editingAgent = null">Cancel</button>
-            <button class="btn-primary" :disabled="savingAgentPath" @click="saveAgentPath">
-              {{ savingAgentPath ? "Saving..." : "Save Path" }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <section class="settings-section">
-        <div class="section-header">
-          <Globe :size="20" class="section-icon" />
+      <!-- Marketplace Sources Section -->
+      <section class="section">
+        <div class="section-title">
+          <Globe :size="20" class="icon" />
           <h2>Marketplace Sources</h2>
         </div>
-        <p class="section-desc">Manage the repositories where you discover new skills.</p>
+        <p class="section-hint">Repositories where you find and update skills.</p>
 
-        <div class="sources-list">
+        <div class="list-container">
           <div
             v-for="source in marketplaceStore.sources"
             :key="source.id"
-            class="source-card"
+            class="item-card glass-card"
             :class="{ disabled: !source.enabled }"
           >
-            <div class="source-info">
-              <div class="source-name-row">
-                <span class="source-name">{{ source.name }}</span>
-                <span v-if="source.official" class="official-badge">Official</span>
-                <span v-if="source.source_type === 'api'" class="api-badge">API</span>
-                <span v-if="source.source_type === 'registry'" class="registry-badge"
-                  >Registry</span
-                >
+            <div class="item-info">
+              <div class="item-text">
+                <div class="item-header-row">
+                  <span class="item-name">{{ source.name }}</span>
+                  <span v-if="source.official" class="badge official">Official</span>
+                  <span v-if="source.source_type === 'api'" class="badge api">API</span>
+                  <span v-if="source.source_type === 'registry'" class="badge registry">Registry</span>
+                </div>
+                <span class="item-subtext">{{ source.url }}</span>
               </div>
-              <span class="source-url">{{ source.url }}</span>
             </div>
-            <div class="source-actions">
-              <!-- Enabled Toggle -->
-              <label class="toggle-switch">
+            
+            <div class="item-actions">
+              <label class="switch">
                 <input
                   type="checkbox"
                   :checked="source.enabled"
                   @change="(e) => toggleSource(source.id, e)"
                 />
-                <span class="slider round"></span>
+                <span class="toggle-slider"></span>
               </label>
 
-              <button
-                class="icon-btn delete"
+              <BaseButton
                 v-if="!source.official && source.source_type !== 'api'"
+                variant="ghost"
+                size="icon"
+                class="danger-ghost"
                 @click="removeSource(source.id)"
               >
-                <Trash2 :size="18" />
-              </button>
+                <Trash2 :size="16" />
+              </BaseButton>
             </div>
           </div>
 
-          <div class="add-buttons">
-            <button class="add-btn" @click="showAddRegistryModal = true">
+          <div class="two-cols">
+            <BaseButton variant="outline" class="dashed" @click="showAddRegistryModal = true">
               <Plus :size="18" />
-              <span>Add Registry Source</span>
-            </button>
-            <button class="add-btn" @click="handleAddLocalSource">
+              Add Registry
+            </BaseButton>
+            <BaseButton variant="outline" class="dashed" @click="handleAddLocalSource">
               <Folder :size="18" />
-              <span>Add Local Skill Folder</span>
-            </button>
+              Add Local Folder
+            </BaseButton>
           </div>
         </div>
       </section>
 
-      <!-- Add Registry Modal -->
-      <div v-if="showAddRegistryModal" class="modal-overlay">
-        <div class="modal-content">
-          <h3>Add Registry Source</h3>
-          <p>Add a remote JSON registry to discover skills.</p>
-
-          <div class="form-group">
-            <label>Registry Name</label>
-            <input v-model="registryName" placeholder="e.g. My Team Skills" class="input-field" />
-          </div>
-
-          <div class="form-group">
-            <label>Registry JSON URL</label>
-            <input v-model="registryUrl" placeholder="https://..." class="input-field" />
-          </div>
-
-          <div class="modal-actions">
-            <button class="btn-secondary" @click="showAddRegistryModal = false">Cancel</button>
-            <button
-              class="btn-primary"
-              :disabled="!registryName || !registryUrl || addingRegistry"
-              @click="saveRegistrySource"
-            >
-              {{ addingRegistry ? "Adding..." : "Add Source" }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <section class="settings-section">
-        <div class="section-header">
-          <Folder :size="20" class="section-icon" />
+      <!-- Managed Projects Section -->
+      <section class="section">
+        <div class="section-title">
+          <Folder :size="20" class="icon" />
           <h2>Managed Projects</h2>
         </div>
-        <p class="section-desc">
-          Add the local directories where your projects are located to manage their skills.
-        </p>
+        <p class="section-hint">Project directories that have localized skills.</p>
 
-        <div class="sources-list">
-          <div v-for="project in projectStore.projects" :key="project.id" class="source-card">
-            <div class="source-info">
-              <div class="source-name-row">
-                <span class="source-name">{{ project.name }}</span>
+        <div class="list-container">
+          <div v-for="project in projectStore.projects" :key="project.id" class="item-card glass-card">
+            <div class="item-info">
+              <div class="item-text">
+                <span class="item-name">{{ project.name }}</span>
+                <span class="item-subtext">{{ project.path }}</span>
               </div>
-              <span class="source-url">{{ project.path }}</span>
             </div>
-            <div class="source-actions">
-              <button class="icon-btn delete" @click="projectStore.removeProject(project.id!)">
-                <Trash2 :size="18" />
-              </button>
+            <div class="item-actions">
+              <BaseButton variant="ghost" size="icon" class="danger-ghost" @click="projectStore.removeProject(project.id!)">
+                <Trash2 :size="16" />
+              </BaseButton>
             </div>
           </div>
 
-          <button class="add-btn" @click="handleAddProject">
+          <BaseButton variant="outline" class="w-full dashed" @click="handleAddProject">
             <Plus :size="18" />
-            <span>Add Project Directory</span>
-          </button>
+            Add Project Directory
+          </BaseButton>
         </div>
       </section>
 
-      <!-- Cache Management Section -->
-      <section class="settings-section">
-        <div class="section-header">
-          <Trash2 :size="20" class="section-icon" />
-          <h2>Cache Management</h2>
+      <!-- Cache & Storage Section -->
+      <section class="section">
+        <div class="section-title">
+          <Download :size="20" class="icon" />
+          <h2>Maintenance & Storage</h2>
         </div>
-        <p class="section-desc">
-          Clear cached marketplace data to force a fresh fetch of all skills.
-        </p>
+        <p class="section-hint">System maintenance and configuration management.</p>
 
-        <div class="cache-actions">
-          <button class="btn-warning" @click="handleClearCache" :disabled="clearingCache">
-            <Trash2 :size="16" />
-            {{ clearingCache ? "Clearing..." : "Clear Skills Cache" }}
-          </button>
-          <span class="cache-hint"
-            >This will clear all cached skill data from marketplace sources.</span
-          >
+        <div class="maintenance-grid">
+          <div class="glass-card maintenance-card">
+            <div class="text">
+              <span class="title">Clear Cache</span>
+              <span class="hint">Force a fresh fetch of all marketplace skills.</span>
+            </div>
+            <BaseButton variant="danger" size="sm" @click="handleClearCache" :loading="clearingCache">
+              Clear Cache
+            </BaseButton>
+          </div>
+
+          <div class="glass-card maintenance-card">
+            <div class="text">
+              <span class="title">Configuration</span>
+              <span class="hint">Backup or restore your settings and sources.</span>
+            </div>
+            <div class="btns">
+              <BaseButton variant="outline" size="sm" @click="handleExportConfig">
+                Export
+              </BaseButton>
+              <BaseButton variant="outline" size="sm" @click="handleImportConfig">
+                Import
+              </BaseButton>
+            </div>
+          </div>
         </div>
       </section>
     </div>
-    <!-- Data Management -->
-    <section class="settings-section">
-      <div class="section-header">
-        <Download :size="20" class="section-icon" />
-        <h2>Data & Storage</h2>
-      </div>
-      <p class="section-desc">Manage your application data and configuration.</p>
 
-      <div class="data-actions">
-        <button class="action-btn" @click="handleExportConfig">
-          <Download :size="16" />
-          <span>Export Configuration</span>
-        </button>
-        <button class="action-btn" @click="handleImportConfig">
-          <Upload :size="16" />
-          <span>Import Configuration</span>
-        </button>
+    <!-- Modals -->
+    <Modal
+      :show="showAddAgentModal"
+      title="Add Custom Agent"
+      @close="showAddAgentModal = false"
+    >
+      <div class="modal-form">
+        <div class="form-item">
+          <label>Agent Name</label>
+          <input v-model="newAgentName" placeholder="e.g. Cursor IDE" class="styled-input" />
+        </div>
+
+        <div class="form-item">
+          <label>Icon</label>
+          <div class="icon-picker-box">
+            <div class="picker-tabs">
+              <button :class="{ active: newAgentIconType === 'emoji' }" @click="newAgentIconType = 'emoji'">Emoji</button>
+              <button :class="{ active: newAgentIconType === 'image' }" @click="newAgentIconType = 'image'">Image</button>
+            </div>
+            <div class="picker-field">
+              <div class="preview-box">
+                <AgentIcon :type="newAgentIcon" :size="24" />
+              </div>
+              <input v-if="newAgentIconType === 'emoji'" v-model="newAgentIcon" class="styled-input" maxlength="2" />
+              <BaseButton v-else variant="outline" size="sm" @click="pickIconImage">
+                {{ newAgentIcon.startsWith('data:') ? 'Change' : 'Select' }} Image
+              </BaseButton>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-item">
+          <label>Skills Path</label>
+          <div class="row">
+            <input v-model="newAgentPath" class="styled-input" placeholder="/path/to/global/skills" />
+            <BaseButton variant="outline" size="md" @click="browseForNewAgentPath">Browse</BaseButton>
+          </div>
+        </div>
       </div>
-    </section>
+      <template #footer>
+        <BaseButton variant="ghost" @click="showAddAgentModal = false">Cancel</BaseButton>
+        <BaseButton variant="primary" :disabled="!newAgentName || !newAgentPath" :loading="addingAgent" @click="addCustomAgent">Add Agent</BaseButton>
+      </template>
+    </Modal>
+
+    <Modal
+      :show="!!editingAgent"
+      :title="`Edit ${editingAgent?.display_name} Path`"
+      @close="editingAgent = null"
+    >
+      <div class="modal-form">
+        <div class="form-item">
+          <label>Skills Directory Path</label>
+          <div class="row">
+            <input v-model="editAgentPath" class="styled-input" />
+            <BaseButton variant="outline" size="md" @click="browseForAgentPath">Browse</BaseButton>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="ghost" @click="editingAgent = null">Cancel</BaseButton>
+        <BaseButton variant="primary" :loading="savingAgentPath" @click="saveAgentPath">Save Path</BaseButton>
+      </template>
+    </Modal>
+
+    <Modal
+      :show="showAddRegistryModal"
+      title="Add Registry Source"
+      @close="showAddRegistryModal = false"
+    >
+      <div class="modal-form">
+        <div class="form-item">
+          <label>Registry Name</label>
+          <input v-model="registryName" placeholder="e.g. Team Registry" class="styled-input" />
+        </div>
+        <div class="form-item">
+          <label>Registry JSON URL</label>
+          <input v-model="registryUrl" placeholder="https://example.com/registry.json" class="styled-input" />
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="ghost" @click="showAddRegistryModal = false">Cancel</BaseButton>
+        <BaseButton variant="primary" :disabled="!registryName || !registryUrl" :loading="addingRegistry" @click="saveRegistrySource">Add Source</BaseButton>
+      </template>
+    </Modal>
   </div>
 </template>
 
 <style scoped>
 .settings-page {
+  padding: 20px;
+  height: 100vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 32px;
-}
-
-h1 {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0;
 }
 
 .sections {
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 32px;
   max-width: 800px;
+  padding-bottom: 40px;
 }
 
-.section-header {
+.section {
+  display: flex;
+  flex-direction: column;
+}
+
+.section-title {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 8px;
 }
 
-.section-icon {
-  color: var(--accent-primary);
-}
-
-h2 {
+.section-title h2 {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
 }
 
-.section-desc {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin: 0 0 20px;
+.section-title .icon {
+  color: var(--accent-primary);
 }
 
-/* Theme Selector */
-.theme-selector {
+.section-hint {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+}
+
+/* Theme Picker */
+.theme-picker {
   display: flex;
-  gap: 12px;
-  background-color: var(--bg-secondary);
-  padding: 6px;
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
+  padding: 4px;
+  border-radius: 12px;
   width: fit-content;
 }
 
-.theme-btn {
+.theme-opt {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 8px 20px;
   border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-secondary);
   transition: all 0.2s;
 }
 
-.theme-btn:hover {
-  background-color: var(--bg-hover);
+.theme-opt:hover {
   color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
-.data-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.action-btn:hover {
-  background-color: var(--bg-tertiary);
-  border-color: var(--accent-primary);
-}
-
-.theme-btn.active {
-  background-color: var(--bg-tertiary);
+.theme-opt.active {
+  background: var(--bg-primary);
   color: var(--accent-primary);
   box-shadow: var(--shadow-sm);
 }
 
-/* API Configuration Styles */
-.api-config {
+/* API Box */
+.api-box {
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
-.api-key-display {
+.api-status {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  padding: 16px;
+  align-items: flex-end;
 }
 
-.key-info {
+.api-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.key-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.key-container .label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.key-wrap {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.key-label {
-  font-size: 14px;
-  color: var(--text-secondary);
 }
 
 .key-value {
-  font-family: monospace;
-  background-color: var(--bg-tertiary);
-  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  background: var(--bg-tertiary);
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: var(--text-primary);
+}
+
+.env-badge, .db-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
   border-radius: 4px;
-  font-size: 13px;
 }
 
 .env-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: #22c55e;
-  background-color: rgba(34, 197, 94, 0.1);
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--accent-success);
 }
 
 .db-badge {
-  font-size: 11px;
-  font-weight: 600;
+  background: rgba(139, 92, 246, 0.1);
   color: var(--accent-primary);
-  background-color: rgba(139, 92, 246, 0.1);
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-.api-key-input {
+.api-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.input-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.input-header .label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cancel-link {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.cancel-link:hover {
+  color: var(--text-primary);
+}
+
+.input-row {
   display: flex;
   gap: 12px;
 }
 
-.input-field {
-  flex: 1;
-  padding: 12px 16px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-.input-field:focus {
-  outline: none;
-  border-color: var(--accent-primary);
-}
-
-.btn-primary {
-  padding: 12px 24px;
-  background-color: var(--accent-primary);
-  color: white;
-  border-radius: var(--border-radius);
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-danger {
+.external-link {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  color: var(--accent-error);
-  border: 1px solid var(--accent-error);
-  border-radius: var(--border-radius);
-  font-size: 13px;
-}
-
-.btn-danger:hover {
-  background-color: rgba(239, 68, 68, 0.1);
-}
-
-.get-key-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--accent-primary);
+  font-weight: 600;
+  width: fit-content;
 }
 
-.get-key-link:hover {
+.external-link:hover {
   text-decoration: underline;
 }
 
-.api-badge {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+/* List Items */
+.list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  transition: all 0.2s;
+}
+
+.item-card:hover {
+  border-color: var(--accent-primary);
+}
+
+.item-card.disabled {
+  opacity: 0.6;
+}
+
+.item-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.item-icon-box {
+  width: 40px;
+  height: 40px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.item-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.item-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-name {
   font-weight: 700;
+  font-size: 15px;
+}
+
+.item-subtext {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: var(--bg-tertiary);
+  padding: 4px 10px;
+  border-radius: 20px;
+  color: var(--text-muted);
+}
+
+.status-indicator.detected {
+  background: rgba(34, 197, 94, 0.1);
   color: var(--accent-success);
-  background-color: rgba(34, 197, 94, 0.1);
-  padding: 2px 6px;
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
   border-radius: 4px;
 }
 
-.registry-badge {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.badge.official { background: rgba(139, 92, 246, 0.1); color: var(--accent-primary); }
+.badge.api { background: rgba(34, 197, 94, 0.1); color: var(--accent-success); }
+.badge.registry { background: rgba(59, 130, 246, 0.1); color: var(--accent-info); }
+
+.two-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dashed {
+  border-style: dashed;
+}
+
+/* Maintenance */
+.maintenance-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.maintenance-card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.maintenance-card .title {
+  display: block;
   font-weight: 700;
-  color: var(--accent-info);
-  background-color: rgba(59, 130, 246, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.maintenance-card .hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.maintenance-card .btns {
+  display: flex;
+  gap: 8px;
+}
+
+/* Form Elements */
+.styled-input {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 16px;
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.styled-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  background: var(--bg-primary);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-item label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.form-item .row {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-picker-box {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.picker-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.picker-tabs button {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.picker-tabs button.active {
+  background: var(--bg-primary);
+  color: var(--accent-primary);
+}
+
+.picker-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.preview-box {
+  width: 44px;
+  height: 44px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Toggle Switch */
-.toggle-switch {
+.switch {
   position: relative;
   display: inline-block;
   width: 40px;
   height: 20px;
-  margin-right: 8px;
 }
 
-.toggle-switch input {
+.switch input {
   opacity: 0;
   width: 0;
   height: 0;
 }
 
-.slider {
+.toggle-slider {
   position: absolute;
   cursor: pointer;
   top: 0;
@@ -1026,356 +1173,39 @@ h2 {
   right: 0;
   bottom: 0;
   background-color: var(--bg-tertiary);
-  transition: 0.4s;
+  transition: 0.3s;
   border-radius: 20px;
   border: 1px solid var(--border-color);
 }
 
-.slider:before {
+.toggle-slider:before {
   position: absolute;
   content: "";
   height: 14px;
   width: 14px;
-  left: 3px;
+  left: 2px;
   bottom: 2px;
   background-color: var(--text-muted);
-  transition: 0.4s;
+  transition: 0.3s;
   border-radius: 50%;
 }
 
-input:checked + .slider {
+input:checked + .toggle-slider {
   background-color: var(--accent-primary);
   border-color: var(--accent-primary);
 }
 
-input:checked + .slider:before {
+input:checked + .toggle-slider:before {
   transform: translateX(20px);
   background-color: white;
 }
 
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
+.danger-ghost:hover {
+  color: var(--accent-error) !important;
+  background: rgba(239, 68, 68, 0.1) !important;
 }
 
-.modal-content {
-  background-color: var(--bg-primary);
-  padding: 24px;
-  border-radius: var(--border-radius);
-  width: 400px;
-  box-shadow: var(--shadow-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.modal-content h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-group label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.btn-secondary {
-  padding: 8px 16px;
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-radius: var(--border-radius);
-  font-size: 14px;
-}
-
-.btn-secondary:hover {
-  background-color: var(--bg-hover);
-}
-
-/* Existing Styles */
-.agents-list,
-.sources-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.agent-card,
-.source-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  padding: 16px;
-}
-
-.source-card.disabled {
-  opacity: 0.7;
-}
-
-.agent-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.agent-icon-wrap {
-  font-size: 20px;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--bg-tertiary);
-  border-radius: 8px;
-}
-
-.agent-details,
-.source-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.agent-name,
-.source-name {
-  font-weight: 600;
-  font-size: 15px;
-}
-
-.agent-path,
-.source-url {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.agent-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  padding: 4px 10px;
-  background-color: var(--bg-tertiary);
-  border-radius: 20px;
-}
-
-.agent-status.installed {
-  color: var(--accent-success);
-  background-color: rgba(34, 197, 94, 0.1);
-}
-
-.source-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.official-badge {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 700;
-  color: var(--accent-primary);
-  background-color: rgba(139, 92, 246, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.add-buttons {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.add-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px;
-  border: 1px dashed var(--border-color);
-  border-radius: var(--border-radius);
-  color: var(--text-secondary);
-  transition: all 0.2s;
-  margin-top: 8px;
-  flex: 1;
-  min-width: 200px;
-}
-
-.add-btn:hover {
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  background-color: rgba(139, 92, 246, 0.05);
-}
-
-.icon-btn.delete {
-  color: var(--text-muted);
-  padding: 8px;
-  border-radius: 8px;
-  transition: all 0.2s;
-}
-
-.icon-btn.delete:hover {
-  color: var(--accent-error);
-  background-color: rgba(239, 68, 68, 0.1);
-}
-
-.cache-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.btn-warning {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background-color: transparent;
-  color: #f59e0b;
-  border: 1px solid #f59e0b;
-  border-radius: var(--border-radius);
-  font-weight: 500;
-  width: fit-content;
-  transition: all 0.2s;
-}
-
-.btn-warning:hover:not(:disabled) {
-  background-color: rgba(245, 158, 11, 0.1);
-}
-
-.btn-warning:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.cache-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.edit-agent {
-  opacity: 0;
-  transition: opacity 0.2s;
-  margin-left: 12px;
-}
-
-.agent-card:hover .edit-agent {
-  opacity: 1;
-}
-
-.input-row {
-  display: flex;
-  gap: 8px;
-}
-
-.delete-agent {
-  opacity: 0;
-  transition: opacity 0.2s;
-  color: var(--text-muted);
-}
-
-.delete-agent:hover {
-  color: var(--accent-error);
-  background-color: rgba(239, 68, 68, 0.1);
-}
-
-.agent-card:hover .delete-agent {
-  opacity: 1;
-}
-
-.agents-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
-}
-
-/* Icon Selector Styles */
-.icon-selector-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background-color: var(--bg-tertiary);
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-}
-
-.icon-type-toggle {
-  display: flex;
-  gap: 4px;
-  background-color: var(--bg-secondary);
-  padding: 4px;
-  border-radius: 6px;
-  width: fit-content;
-}
-
-.toggle-btn {
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: all 0.2s;
-}
-
-.toggle-btn:hover {
-  color: var(--text-primary);
-}
-
-.toggle-btn.active {
-  background-color: var(--bg-tertiary);
-  color: var(--accent-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.icon-input-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.icon-preview {
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.icon-input {
-  flex: 1;
+.w-full {
+  width: 100%;
 }
 </style>

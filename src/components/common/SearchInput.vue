@@ -12,7 +12,7 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="search-box">
+  <div class="search-box glass">
     <Search :size="18" class="search-icon" />
     <input
       type="text"
@@ -27,28 +27,38 @@ defineEmits<{
 .search-box {
   position: relative;
   width: 100%;
-  max-width: 400px;
+  max-width: 480px;
+  display: flex;
+  align-items: center;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-box:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+  transform: translateY(-1px);
 }
 
 .search-icon {
   position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 14px;
   color: var(--text-muted);
+  pointer-events: none;
 }
 
 input {
   width: 100%;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  padding: 10px 12px 10px 40px;
+  background: transparent;
+  border: none;
+  padding: 12px 14px 12px 42px;
   outline: none;
-  transition: border-color 0.2s;
+  color: var(--text-primary);
+  font-size: 14px;
 }
 
-input:focus {
-  border-color: var(--accent-primary);
+input::placeholder {
+  color: var(--text-muted);
 }
 </style>
