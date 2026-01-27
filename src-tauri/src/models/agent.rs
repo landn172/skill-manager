@@ -137,11 +137,6 @@ impl AgentConfig {
         ]
     }
 
-    // Kept for backward compatibility, returns default known agents
-    pub fn all() -> Vec<Self> {
-        Self::default_known()
-    }
-
     pub async fn detect_installed(agent: &mut AgentConfig) {
         match &agent.agent_type {
             AgentType::Known(KnownAgentType::Opencode) => {

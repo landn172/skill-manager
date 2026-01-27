@@ -238,8 +238,3 @@ fn convert_skillsmp_skills(skills: Vec<SkillsmpSkill>) -> Vec<MarketplaceSkill> 
         })
         .collect()
 }
-
-/// Check if API key is configured (from any source)
-pub fn has_api_key() -> bool {
-    get_api_key().map(|k| k.is_some()).unwrap_or(false)
-}
