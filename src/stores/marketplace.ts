@@ -127,7 +127,9 @@ export const useMarketplaceStore = defineStore("marketplace", {
         if (state.sortBy === "stars") {
           return (b.stars || 0) - (a.stars || 0);
         } else if (state.sortBy === "updated") {
-          return 0;
+          const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+          const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+          return dateB - dateA;
         } else {
           return a.name.localeCompare(b.name);
         }
@@ -360,6 +362,7 @@ export const useMarketplaceStore = defineStore("marketplace", {
         stars: s.stars || 0,
         repo: s.githubUrl, 
         repo_url: s.githubUrl,
+        updated_at: s.updatedAt || s.updated_at, // Handle potential API variations
         tags: [],
       }));
 

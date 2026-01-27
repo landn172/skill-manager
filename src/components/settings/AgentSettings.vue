@@ -112,16 +112,30 @@ async function addCustomAgent() {
   }
 }
 
-async function removeCustomAgent(agent: any) {
-  if (!confirm(`Remove custom agent "${agent.display_name}"?`)) return;
+const showDeleteModal = ref(false);
+const agentToDelete = ref<any>(null);
+const deletingAgent = ref(false);
 
+function confirmRemoveAgent(agent: any) {
+  agentToDelete.value = agent;
+  showDeleteModal.value = true;
+}
+
+async function handleDeleteAgent() {
+  if (!agentToDelete.value) return;
+  
+  deletingAgent.value = true;
   try {
     await invoke("remove_custom_agent", {
-      agentType: agent.agent_type,
+      agentType: agentToDelete.value.agent_type,
     });
     await agentsStore.fetchAgents();
+    showDeleteModal.value = false;
+    agentToDelete.value = null;
   } catch (e) {
     alert(`Failed to remove agent: ${e}`);
+  } finally {
+    deletingAgent.value = false;
   }
 }
 
@@ -178,8 +192,8 @@ async function browseForNewAgentPath() {
             variant="ghost"
             size="icon"
             class="danger-ghost"
-            @click="removeCustomAgent(agent)"
             title="Remove Custom Agent"
+            @click="confirmRemoveAgent(agent)"
           >
             <Trash2 :size="16" />
           </BaseButton>
@@ -256,10 +270,52 @@ async function browseForNewAgentPath() {
         <BaseButton variant="primary" :loading="savingAgentPath" @click="saveAgentPath">Save Path</BaseButton>
       </template>
     </Modal>
+
+    <!-- Delete Confirmation Modal -->
+    <Modal
+      :show="showDeleteModal"
+      title="Remove Agent"
+      @close="showDeleteModal = false"
+    >
+      <div class="confirm-content">
+        <p>Are you sure you want to remove <strong>{{ agentToDelete?.display_name }}</strong>?</p>
+        <p class="sub-text">This will only remove it from Skill Manager. Your local files and configuration for the agent will remain untouched.</p>
+      </div>
+      <template #footer>
+        <BaseButton variant="ghost" @click="showDeleteModal = false">Cancel</BaseButton>
+        <BaseButton variant="primary" class="danger-btn" :loading="deletingAgent" @click="handleDeleteAgent">Remove</BaseButton>
+      </template>
+    </Modal>
   </section>
 </template>
 
 <style scoped>
+.confirm-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confirm-content strong {
+  color: var(--text-primary);
+}
+
+.sub-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.danger-btn {
+  background-color: var(--accent-error) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.danger-btn:hover {
+  background-color: #dc2626 !important; /* Red-600 */
+}
+
 .section {
   display: flex;
   flex-direction: column;

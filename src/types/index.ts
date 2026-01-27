@@ -60,6 +60,7 @@ export interface MarketplaceSkill extends Skill {
   stars?: number;
   repo?: string;
   repo_url?: string;
+  updated_at?: string;
 }
 
 // SkillsMP API response types

@@ -3,8 +3,10 @@ import { onMounted, computed, ref } from "vue";
 import type { InstalledSkill } from "@/types";
 import SkillList from "@/components/skill/SkillList.vue";
 import SkillEditor from "@/components/skill/SkillEditor.vue";
+import SkillCardSkeleton from "@/components/skill/SkillCardSkeleton.vue";
 import PageHeader from "@/components/common/PageHeader.vue";
 import InstallModal from "@/components/skill/InstallModal.vue";
+import Modal from "@/components/common/Modal.vue";
 import BaseButton from "@/components/common/BaseButton.vue";
 import { RefreshCw, Package, Plus, Trash2 } from "lucide-vue-next";
 import { useSkillsStore } from "@/stores/skills";
@@ -95,14 +97,31 @@ function openInstallModal(skill: InstalledSkill) {
   showInstallModal.value = true;
 }
 
-async function handleUninstall(skill: InstalledSkill) {
-  if (!confirm(`Are you sure you want to uninstall ${skill.name}?`)) return;
+const showUninstallModal = ref(false);
+const skillToUninstall = ref<InstalledSkill | null>(null);
+const uninstalling = ref(false);
+
+function confirmUninstall(skill: InstalledSkill) {
+  skillToUninstall.value = skill;
+  showUninstallModal.value = true;
+}
+
+async function handleUninstallConfirm() {
+  if (!skillToUninstall.value) return;
+  
+  uninstalling.value = true;
   try {
+    const skill = skillToUninstall.value;
     for (const agent of skill.agents) {
       await skillsStore.uninstallSkill(skill.name, agent);
     }
+    showUninstallModal.value = false;
+    skillToUninstall.value = null;
+    handleRefresh();
   } catch (e) {
     alert(`Failed to uninstall: ${e}`);
+  } finally {
+    uninstalling.value = false;
   }
 }
 
@@ -158,9 +177,8 @@ function handleScopeChange(newScope: "project" | "global") {
     </div>
 
     <div class="content-area">
-      <div v-if="loading && skills.length === 0" class="loading-state">
-        <div class="loader"></div>
-        <p>Scanning for installed skills...</p>
+      <div v-if="loading && skills.length === 0" class="skills-grid">
+        <SkillCardSkeleton v-for="i in 6" :key="i" />
       </div>
 
       <div v-else-if="skills.length === 0" class="empty-state glass-card">
@@ -176,7 +194,7 @@ function handleScopeChange(newScope: "project" | "global") {
           :is-selection-mode="isSelectionMode"
           :selected-skills="selectedSkills"
           @edit="handleEdit"
-          @uninstall="handleUninstall"
+          @uninstall="confirmUninstall"
           @install="openInstallModal"
           @toggle-selection="handleToggleSelection"
         />
@@ -216,10 +234,57 @@ function handleScopeChange(newScope: "project" | "global") {
       @close="showInstallModal = false"
       @success="handleRefresh"
     />
+
+    <!-- Uninstall Confirmation Modal -->
+    <Modal
+      :show="showUninstallModal"
+      title="Uninstall Skill"
+      @close="showUninstallModal = false"
+    >
+      <div class="confirm-content">
+        <p>Are you sure you want to uninstall <strong>{{ skillToUninstall?.name }}</strong>?</p>
+        <p class="sub-text">This will remove the skill from all installed agents.</p>
+      </div>
+      <template #footer>
+        <BaseButton variant="ghost" @click="showUninstallModal = false">Cancel</BaseButton>
+        <BaseButton variant="primary" class="danger-btn" :loading="uninstalling" @click="handleUninstallConfirm">Uninstall</BaseButton>
+      </template>
+    </Modal>
   </div>
 </template>
 
 <style scoped>
+.confirm-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confirm-content strong {
+  color: var(--text-primary);
+}
+
+.sub-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.danger-btn {
+  background-color: var(--accent-error) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.danger-btn:hover {
+  background-color: #dc2626 !important;
+}
+.skills-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  padding: 20px;
+}
 .installed-page {
   padding: 20px;
   height: 100vh;

@@ -7,10 +7,6 @@ use walkdir::WalkDir;
 
 const SKIP_DIRS: &[&str] = &["node_modules", ".git", "dist", "build", "__pycache__"];
 
-async fn has_skill_md(dir: &Path) -> bool {
-    dir.join("SKILL.md").exists() || dir.join("README.md").exists()
-}
-
 async fn get_skill_file(dir: &Path) -> Option<std::path::PathBuf> {
     if dir.join("SKILL.md").exists() {
         Some(dir.join("SKILL.md"))
@@ -148,16 +144,6 @@ pub async fn discover_skills(path: String, subpath: Option<String>) -> Result<Ve
     let mut skills = Vec::new();
     let mut seen_names = std::collections::HashSet::new();
 
-    // Check directly
-    if has_skill_md(&search_path).await {
-        if let Some(skill_file) = get_skill_file(&search_path).await {
-            if let Some(skill) = parse_skill_md(&skill_file).await {
-                skills.push(skill);
-                return Ok(skills);
-            }
-        }
-    }
-
     // Recursive search with walkdir
     for entry in WalkDir::new(&search_path)
         .max_depth(5)
@@ -165,14 +151,27 @@ pub async fn discover_skills(path: String, subpath: Option<String>) -> Result<Ve
         .filter_entry(|e| !SKIP_DIRS.contains(&e.file_name().to_str().unwrap_or("")))
         .filter_map(|e| e.ok())
     {
-        let file_name = entry.file_name().to_str().unwrap_or("");
-        if file_name == "SKILL.md" || file_name == "README.md" {
-            if let Some(skill) = parse_skill_md(entry.path()).await {
-                if !seen_names.contains(&skill.name) {
-                    seen_names.insert(skill.name.clone());
-                    skills.push(skill);
+        if entry.file_type().is_dir() {
+            if let Some(skill_file) = get_skill_file(entry.path()).await {
+                if let Some(skill) = parse_skill_md(&skill_file).await {
+                    if !seen_names.contains(&skill.name) {
+                        seen_names.insert(skill.name.clone());
+                        skills.push(skill);
+                    }
                 }
             }
+        }
+    }
+
+    // Heuristic: If we found multiple skills and one is at the root,
+    // assume the root one is just the repo Readme and prefer the specific sub-skills.
+    if skills.len() > 1 {
+        // Find if any skill path matches the search_path
+        if let Some(root_idx) = skills
+            .iter()
+            .position(|s| Path::new(&s.path) == search_path)
+        {
+            skills.remove(root_idx);
         }
     }
 
@@ -316,4 +315,70 @@ pub async fn save_skill_content(
     let fname = filename.unwrap_or_else(|| "SKILL.md".to_string());
     let path = PathBuf::from(skill_path).join(fname);
     fs::write(path, content).await.map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::git::clone_repo;
+
+    #[tokio::test]
+    async fn test_github_discovery_monorepo() {
+        let dir = tempfile::tempdir().unwrap();
+        let url = "https://github.com/anthropics/skills.git";
+
+        println!("Cloning {}...", url);
+        match clone_repo(url, dir.path()).await {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Skipping test due to clone failure (network issue?): {}", e);
+                return;
+            }
+        }
+
+        let skills = discover_skills(dir.path().to_str().unwrap().to_string(), None)
+            .await
+            .expect("Failed to discover");
+
+        println!("Found {} skills", skills.len());
+        for skill in &skills {
+            println!("- {} (Path: {})", skill.name, skill.path);
+        }
+
+        assert!(
+            skills.len() > 1,
+            "Should find multiple skills in anthropics/skills (monorepo), found {}",
+            skills.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_github_discovery_single_skill() {
+        let dir = tempfile::tempdir().unwrap();
+        let url = "https://github.com/BH-M87/why-what-how-skill.git";
+
+        println!("Cloning {}...", url);
+        match clone_repo(url, dir.path()).await {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Skipping test due to clone failure (network issue?): {}", e);
+                return;
+            }
+        }
+
+        let skills = discover_skills(dir.path().to_str().unwrap().to_string(), None)
+            .await
+            .expect("Failed to discover");
+
+        println!("Found {} skills", skills.len());
+        for skill in &skills {
+            println!("- {} (Path: {})", skill.name, skill.path);
+        }
+
+        assert_eq!(
+            skills.len(),
+            1,
+            "Should find exactly one skill in why-what-how-skill (single repo)"
+        );
+    }
 }

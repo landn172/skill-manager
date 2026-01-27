@@ -12,6 +12,11 @@
 <p align="center"><em>技能市场 - 浏览和发现来自多个来源的技能</em></p>
 
 <p align="center">
+  <img src="docs/screenshots/install-flow.gif" alt="安装流程演示" width="600" />
+</p>
+<p align="center"><em>安装流程 - 一键安装技能</em></p>
+
+<p align="center">
   <img src="docs/screenshots/installed.png" alt="已安装技能" width="600" />
 </p>
 <p align="center"><em>已安装技能 - 管理您已安装的技能</em></p>
@@ -23,8 +28,18 @@
 
 ## 🚀 功能特性
 
-- **集中式市场**: 从多个官方和社区来源浏览和发现技能。
-- **多代理支持**: 一键将技能安装到不同的 AI 代理。
+- **集中式市场**: 从多个官方和社区来源浏览和发现技能（SkillsMP, Anthropic 等）。
+- **智能引导**: 自动检测已安装的代理（Cursor, VS Code 等）并提供一键配置。
+- **改进的发现机制**:
+  - 支持单技能仓库（如 `BH-M87/why-what-how-skill`）。
+  - 递归发现 Monorepo 中的技能（如 `anthropics/skills`）。
+- **安全优先**:
+  - 卸载时提供确认弹窗，防止误操作。
+  - 保护关键技能不被意外删除。
+- **本地 MCP 管理器** (即将推出):
+  - 可视化配置 Model Context Protocol服务器。
+  - 在“开发模式”（Github/Postgres MCP）和“写作模式”之间即时切换。
+- **多代理支持**: 一键将技能安装到 Cursor、VS Code、Claude 等。
 - **高级获取方式**:
   - **Git 优先**: 直接克隆仓库以获取最新代码。
   - **HTTP 回退**: 如果 Git 不可用或需要身份验证，自动回退到 ZIP 下载。

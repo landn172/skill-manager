@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { X } from "lucide-vue-next";
 
-defineProps<{
+const props = defineProps<{
   show: boolean;
   title: string;
   maxWidth?: string;
@@ -10,6 +10,22 @@ defineProps<{
 const emit = defineEmits<{
   (e: "close"): void;
 }>();
+
+import { onMounted, onUnmounted } from "vue";
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === "Escape" && props.show) {
+    emit("close");
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("keydown", handleKeydown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("keydown", handleKeydown);
+});
 </script>
 
 <template>

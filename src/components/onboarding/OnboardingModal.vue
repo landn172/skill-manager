@@ -3,8 +3,9 @@ import { ref, computed } from "vue";
 import Modal from "@/components/common/Modal.vue";
 import { useAgentsStore } from "@/stores/agents";
 import { useMarketplaceStore } from "@/stores/marketplace";
+import { invoke } from "@tauri-apps/api/core";
 import AgentIcon from "@/components/icons/AgentIcon.vue";
-import { CheckCircle2, Rocket, ArrowRight, Sparkles } from "lucide-vue-next";
+import { CheckCircle2, Rocket, ArrowRight, Sparkles, Download, CheckSquare, Square } from "lucide-vue-next";
 import BaseButton from "@/components/common/BaseButton.vue";
 
 defineProps<{
@@ -18,6 +19,10 @@ const emit = defineEmits<{
 const agentsStore = useAgentsStore();
 const marketplaceStore = useMarketplaceStore();
 const step = ref(1);
+const selectedSkillNames = ref<string[]>([]);
+const installing = ref(false);
+const installProgress = ref(0);
+const installStatus = ref("");
 
 const steps = [
   { id: 1, title: "Welcome" },
@@ -35,6 +40,8 @@ async function nextStep() {
     if (marketplaceStore.skills.length === 0) {
       await marketplaceStore.fetchSkills();
     }
+    // Select all available recommendations by default
+    selectedSkillNames.value = recommendedSkills.value.map(s => s.name);
   } else if (step.value === 3) {
     step.value = 4;
   } else {
@@ -46,7 +53,49 @@ const recommendedSkills = computed(() => {
   return marketplaceStore.filteredSkills.slice(0, 3);
 });
 
-const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.installed).length);
+const installedAgentTypes = computed(() => agentsStore.agents.filter(a => a.installed).map(a => a.agent_type));
+
+function toggleSkill(name: string) {
+  if (selectedSkillNames.value.includes(name)) {
+    selectedSkillNames.value = selectedSkillNames.value.filter(n => n !== name);
+  } else {
+    selectedSkillNames.value.push(name);
+  }
+}
+
+async function handleInstallRecommendations() {
+  if (selectedSkillNames.value.length === 0) return;
+  
+  installing.value = true;
+  installProgress.value = 0;
+  
+  const skillsToInstall = recommendedSkills.value.filter(s => selectedSkillNames.value.includes(s.name));
+  const total = skillsToInstall.length;
+  
+  try {
+    for (let i = 0; i < total; i++) {
+      const skill = skillsToInstall[i];
+      installStatus.value = `Installing ${skill.name}...`;
+      
+      await invoke("install_skill", {
+        skill: skill,
+        agents: installedAgentTypes.value,
+        scope: "global",
+      });
+      
+      installProgress.value = ((i + 1) / total) * 100;
+    }
+    
+    installStatus.value = "All done!";
+    await new Promise(r => setTimeout(r, 800));
+    step.value = 4; // Auto advance to done
+  } catch (e) {
+    installStatus.value = `Error: ${e}`;
+    console.error(e);
+  } finally {
+    installing.value = false;
+  }
+}
 </script>
 
 <template>
@@ -126,21 +175,35 @@ const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.i
           <p>Fetching top skills...</p>
         </div>
 
-        <div v-else class="recommendations-list">
-          <div
-            v-for="skill in recommendedSkills"
-            :key="skill.name"
-            class="rec-item glass-card"
-          >
-            <div class="rec-icon">
-              <Sparkles :size="16" />
-            </div>
-            <div class="rec-info">
-              <span class="rec-name">{{ skill.name }}</span>
-              <span class="rec-desc">{{ skill.description }}</span>
+        <div v-else class="recommendations-wrap">
+          <div class="recommendations-list">
+            <div
+              v-for="skill in recommendedSkills"
+              :key="skill.name"
+              class="rec-item glass-card"
+              :class="{ selected: selectedSkillNames.includes(skill.name) }"
+              @click="toggleSkill(skill.name)"
+            >
+              <div class="check-col">
+                <CheckSquare v-if="selectedSkillNames.includes(skill.name)" :size="20" class="check-icon" />
+                <Square v-else :size="20" class="check-icon unchecked" />
+              </div>
+              <div class="rec-icon">
+                <Sparkles :size="16" />
+              </div>
+              <div class="rec-info">
+                <span class="rec-name">{{ skill.name }}</span>
+                <span class="rec-desc">{{ skill.description }}</span>
+              </div>
             </div>
           </div>
-          <p class="skip-hint">You can find many more in the marketplace later.</p>
+          
+          <div v-if="installing" class="install-status">
+             <div class="progress-bar">
+               <div class="progress-fill" :style="{ width: `${installProgress}%` }"></div>
+             </div>
+             <span class="status-text">{{ installStatus }}</span>
+          </div>
         </div>
       </div>
 
@@ -151,7 +214,7 @@ const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.i
         </div>
         <h2>All Systems Go!</h2>
         <p>
-          Found <strong>{{ installedAgentsCount }}</strong> agents. You're ready to explore the marketplace and boost your productivity.
+          You're all set. You can find more skills in the Marketplace or configure new Agents in Settings.
         </p>
       </div>
     </div>
@@ -166,10 +229,22 @@ const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.i
             :class="{ active: step === s.id }"
           ></div>
         </div>
-        <BaseButton variant="primary" @click="nextStep">
-          {{ step === 4 ? "Explore Now" : "Continue" }}
-          <ArrowRight v-if="step < 4" :size="16" />
-        </BaseButton>
+        
+        <div class="actions">
+          <BaseButton v-if="step === 3 && !installing && selectedSkillNames.length > 0" variant="primary" @click="handleInstallRecommendations">
+            <Download :size="16" />
+            Install Selected ({{ selectedSkillNames.length }})
+          </BaseButton>
+          
+          <BaseButton 
+            v-if="!installing"
+            :variant="step === 3 && selectedSkillNames.length > 0 ? 'ghost' : 'primary'" 
+            @click="nextStep"
+          >
+            {{ step === 4 ? "Explore Now" : (step === 3 && selectedSkillNames.length > 0 ? "Skip" : "Continue") }}
+            <ArrowRight v-if="step < 4 && !(step === 3 && selectedSkillNames.length > 0)" :size="16" />
+          </BaseButton>
+        </div>
       </div>
     </template>
   </Modal>
@@ -321,6 +396,13 @@ p {
   margin-bottom: 4px;
 }
 
+.recommendations-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .recommendations-list {
   display: flex;
   flex-direction: column;
@@ -334,6 +416,30 @@ p {
   gap: 12px;
   padding: 12px 16px;
   text-align: left;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.rec-item:hover {
+  background: var(--bg-hover);
+}
+
+.rec-item.selected {
+  border-color: var(--accent-primary);
+  background: rgba(139, 92, 246, 0.05);
+}
+
+.check-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+}
+
+.check-icon.unchecked {
+  color: var(--text-muted);
+  opacity: 0.5;
 }
 
 .rec-icon {
@@ -352,6 +458,7 @@ p {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1;
 }
 
 .rec-name {
@@ -370,10 +477,31 @@ p {
   text-overflow: ellipsis;
 }
 
-.skip-hint {
-  font-size: 11px !important;
-  margin-top: 4px !important;
-  opacity: 0.8;
+.install-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.progress-bar {
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  transition: width 0.3s ease;
+}
+
+.status-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 
@@ -383,6 +511,11 @@ p {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
 }
 
 .indicators {

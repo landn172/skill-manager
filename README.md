@@ -2,7 +2,10 @@
 
 [English](./README.md) | [中文](./README.zh-CN.md)
 
-**Skill Manager** is a powerful desktop application built with Tauri, Vue 3, and Rust, designed to manage skills for various AI agents (Anthropic, Claude Code, OpenCode, Cursor, and more).
+> **The App Store for your AI Agents (Cursor, Claude, etc.)**  
+> **The easiest way to manage MCP servers locally.**
+
+**Skill Manager** is a powerful desktop application built with Tauri, Vue 3, and Rust, designed to manage skills and MCP servers for various AI agents (Anthropic, Claude Code, OpenCode, Cursor, and more).
 
 ## 📸 Screenshots
 
@@ -10,6 +13,11 @@
   <img src="docs/screenshots/marketplace.png" alt="Marketplace" width="600" />
 </p>
 <p align="center"><em>Marketplace - Browse and discover skills from multiple sources</em></p>
+
+<p align="center">
+  <img src="docs/screenshots/install-flow.gif" alt="Install Flow Demo" width="600" />
+</p>
+<p align="center"><em>Install Flow - One-click skill installation</em></p>
 
 <p align="center">
   <img src="docs/screenshots/installed.png" alt="Installed Skills" width="600" />
@@ -23,14 +31,23 @@
 
 ## 🚀 Features
 
-- **Centralized Marketplace**: Browse and discover skills from multiple official and community sources.
-- **Multi-Agent Support**: Install skills to different AI agents with a single click.
+- **The Agent App Store**: Browse and discover skills from multiple official and community sources (SkillsMP, Anthropic, etc.).
+- **Smart Onboarding**: Automatically detects your installed agents (Cursor, VS Code, etc.) and offers one-click setup.
+- **Improved Discovery**: 
+  - Supports single-skill repositories (e.g., `BH-M87/why-what-how-skill`).
+  - recursively discovers skills in monorepos (e.g., `anthropics/skills`).
+- **Safety First**: 
+  - Secure uninstallation with confirmation modals.
+  - Prevents accidental deletion of critical skills.
+- **Local MCP Manager** (Coming Soon):
+  - Visual configuration for Model Context Protocol servers.
+  - Switch between "Dev Mode" (Github/Postgres MCP) to "Writing Mode" instantly.
+- **Multi-Agent Support**: Install skills to Cursor, VS Code, Claude, and more with a single click.
 - **Advanced Fetching**:
   - **Git-first**: Clones repositories directly for the most up-to-date code.
-  - **HTTP Fallback**: Automatically falls back to ZIP downloads if Git is unavailable or requires authentication.
-  - **Progress Tracking**: Real-time feedback on fetching progress and sources.
+  - **HTTP Fallback**: Automatically falls back to ZIP downloads if Git is unavailable.
 - **Local Management**: View, create, and uninstall skills from your local environment.
-- **Persistent Caching**: Faster startup and offline access to marketplace metadata and source code.
+- **Persistent Caching**: Faster startup and offline access.
 
 ## 📦 Sources
 

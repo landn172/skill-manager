@@ -27,11 +27,20 @@ const processedSrc = computed(() => {
 });
 
 const isImage = computed(() => {
+  const t = props.type.toLowerCase();
   return (
-    props.type.startsWith("data:image/") ||
-    props.type.startsWith("http") ||
-    props.type.includes("/") ||
-    props.type.includes("\\")
+    t.startsWith("data:image/") ||
+    t.startsWith("http") ||
+    t.includes("/") ||
+    t.includes("\\") ||
+    // Also check for common image extensions even if no path separators
+    t.endsWith(".png") ||
+    t.endsWith(".jpg") ||
+    t.endsWith(".jpeg") ||
+    t.endsWith(".svg") ||
+    t.endsWith(".webp") ||
+    t.endsWith(".ico") ||
+    t.endsWith(".gif")
   );
 });
 
@@ -176,7 +185,7 @@ const isEmoji = computed(() => {
     viewBox="0 0 28 21"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    style="color: #60a5fa"
+    style="color: #32f08c"
   >
     <g clip-path="url(#trae_clip)">
       <path fill="currentColor" d="M28.002 20.846H4v-3.998H0V.846h28.002zM4 16.848h20.002V4.845H4zm10.002-6.062-2.829 2.828-2.828-2.828 2.828-2.829zm8-.002-2.828 2.828-2.829-2.828 2.829-2.829z"></path>

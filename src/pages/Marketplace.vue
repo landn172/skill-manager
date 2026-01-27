@@ -7,6 +7,7 @@ import SkillCard from "@/components/skill/SkillCard.vue";
 import SkillCardSkeleton from "@/components/skill/SkillCardSkeleton.vue";
 import PageHeader from "@/components/common/PageHeader.vue";
 import InstallModal from "@/components/skill/InstallModal.vue";
+import Modal from "@/components/common/Modal.vue";
 import BaseButton from "@/components/common/BaseButton.vue";
 import MarketplaceFilters from "@/components/marketplace/MarketplaceFilters.vue";
 import DiscoveryModal from "@/components/marketplace/DiscoveryModal.vue";
@@ -100,9 +101,21 @@ function openDiscoveryModal() {
   showUrlDiscoveryModal.value = true;
 }
 
-async function handleUninstall(skillName: string) {
-  if (!confirm(`Are you sure you want to uninstall ${skillName}?`)) return;
+const showUninstallModal = ref(false);
+const skillToUninstall = ref<string | null>(null);
+const uninstalling = ref(false);
+
+function confirmUninstall(skillName: string) {
+  skillToUninstall.value = skillName;
+  showUninstallModal.value = true;
+}
+
+async function handleUninstallConfirm() {
+  if (!skillToUninstall.value) return;
+  
+  uninstalling.value = true;
   try {
+    const skillName = skillToUninstall.value;
     const installedSkill = skillsStore.getSkillByName(skillName);
     if (installedSkill) {
       for (const agent of installedSkill.agents) {
@@ -110,8 +123,12 @@ async function handleUninstall(skillName: string) {
       }
     }
     skillsStore.fetchInstalledSkills();
+    showUninstallModal.value = false;
+    skillToUninstall.value = null;
   } catch (e) {
     alert(`Failed to uninstall: ${e}`);
+  } finally {
+    uninstalling.value = false;
   }
 }
 
@@ -155,7 +172,7 @@ function onInstallSuccess() {
             :show-source="true"
             @install="openInstallModal"
             @update="openInstallModal"
-            @uninstall="handleUninstall"
+            @uninstall="confirmUninstall"
           />
         </div>
 
@@ -184,10 +201,51 @@ function onInstallSuccess() {
       @close="showUrlDiscoveryModal = false"
       @install="(skill) => { showUrlDiscoveryModal = false; openInstallModal(skill); }"
     />
+
+    <!-- Uninstall Confirmation Modal -->
+    <Modal
+      :show="showUninstallModal"
+      title="Uninstall Skill"
+      @close="showUninstallModal = false"
+    >
+      <div class="confirm-content">
+        <p>Are you sure you want to uninstall <strong>{{ skillToUninstall }}</strong>?</p>
+        <p class="sub-text">This will remove the skill from all installed agents.</p>
+      </div>
+      <template #footer>
+        <BaseButton variant="ghost" @click="showUninstallModal = false">Cancel</BaseButton>
+        <BaseButton variant="primary" class="danger-btn" :loading="uninstalling" @click="handleUninstallConfirm">Uninstall</BaseButton>
+      </template>
+    </Modal>
   </div>
 </template>
 
 <style scoped>
+.confirm-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confirm-content strong {
+  color: var(--text-primary);
+}
+
+.sub-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.danger-btn {
+  background-color: var(--accent-error) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.danger-btn:hover {
+  background-color: #dc2626 !important;
+}
 .marketplace-page {
   padding: 20px;
   height: 100vh;
