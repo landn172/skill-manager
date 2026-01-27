@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useMarketplaceStore } from "@/stores/marketplace";
 import SearchInput from "@/components/common/SearchInput.vue";
 import BaseButton from "@/components/common/BaseButton.vue";
@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ArrowUpDown,
   Github,
+  History,
 } from "lucide-vue-next";
 import type { SearchMode } from "@/types";
 
@@ -18,6 +19,8 @@ const emit = defineEmits<{
 }>();
 
 const store = useMarketplaceStore();
+const showHistory = ref(false);
+const filtersRef = ref<HTMLElement | null>(null);
 
 const isSkillsmpSelected = computed(() => store.selectedSource === "skillsmp");
 const showNoApiKeyWarning = computed(() => isSkillsmpSelected.value && !store.hasApiKey);
@@ -43,14 +46,39 @@ function handleDiscovery() {
     emit("discover", store.searchQuery.trim());
   }
 }
+
+function selectHistory(item: string) {
+  store.searchQuery = item;
+  showHistory.value = false;
+  if (isSkillsmpSelected.value) {
+    store.searchSkillsmp(item);
+  } else {
+    // If not SkillsMP, we just update the query (which triggers local filter)
+  }
+}
+
+function handleClickOutside(event: MouseEvent) {
+  if (filtersRef.value && !filtersRef.value.contains(event.target as Node)) {
+    showHistory.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("mousedown", handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("mousedown", handleClickOutside);
+});
 </script>
 
 <template>
-  <div class="filters-container glass">
+  <div ref="filtersRef" class="filters-container glass">
     <div class="search-row">
       <div class="search-wrap">
         <SearchInput
           v-model="store.searchQuery"
+          @focus="showHistory = true"
           :placeholder="
             isSkillsmpSelected
               ? store.searchMode === 'ai'
@@ -60,6 +88,27 @@ function handleDiscovery() {
           "
         />
         
+        <!-- Search History Dropdown -->
+        <transition name="fade">
+          <div v-if="showHistory && store.searchHistory.length > 0" class="history-dropdown glass">
+            <div class="history-header">
+              <span>Recent Searches</span>
+              <button class="clear-btn" @click.stop="store.clearHistory()">Clear All</button>
+            </div>
+            <div class="history-list">
+              <div
+                v-for="item in store.searchHistory"
+                :key="item"
+                class="history-item"
+                @click="selectHistory(item)"
+              >
+                <History :size="14" />
+                <span>{{ item }}</span>
+              </div>
+            </div>
+          </div>
+        </transition>
+
         <!-- Quick Install from URL suggestion -->
         <div v-if="isGithubUrl" class="discovery-suggestion animate-fade-in">
           <Github :size="14" />
@@ -117,25 +166,86 @@ function handleDiscovery() {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  position: relative;
+  z-index: 100;
 }
 
 .search-row {
   display: flex;
   gap: 12px;
+  position: relative;
+  z-index: 101;
 }
 
 .search-wrap {
   flex: 1;
   position: relative;
+  z-index: 102;
+}
+
+.history-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  border-radius: 12px;
+  max-height: 320px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.history-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.clear-btn {
+  color: var(--accent-primary);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.history-list {
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.history-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  padding-left: 20px;
 }
 
 .discovery-suggestion {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 8px);
   left: 0;
   right: 0;
   z-index: 10;
-  margin-top: 8px;
   padding: 8px 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--accent-primary);
@@ -145,6 +255,18 @@ function handleDiscovery() {
   align-items: center;
   gap: 8px;
   box-shadow: var(--shadow-md);
+}
+
+/* Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 .discovery-suggestion button {

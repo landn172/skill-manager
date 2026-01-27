@@ -72,7 +72,11 @@ watch(
     }
 
     searchDebounceTimer.value = setTimeout(() => {
-      store.searchSkillsmp(query);
+      if (shouldSearchSkillsmp) {
+        store.searchSkillsmp(query);
+      } else {
+        store.addToHistory(query);
+      }
     }, 500);
   },
 );

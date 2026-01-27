@@ -27,6 +27,7 @@ interface MarketplaceState {
   pageSize: number;
   hasMore: boolean;
   total: number;
+  searchHistory: string[];
 }
 
 export const useMarketplaceStore = defineStore("marketplace", {
@@ -51,6 +52,7 @@ export const useMarketplaceStore = defineStore("marketplace", {
     pageSize: 50,
     hasMore: false,
     total: 0,
+    searchHistory: JSON.parse(localStorage.getItem("marketplace_search_history") || "[]"),
   }),
 
   getters: {
@@ -234,6 +236,8 @@ export const useMarketplaceStore = defineStore("marketplace", {
         return this.fetchSkills("skillsmp");
       }
 
+      this.addToHistory(query);
+
       if (!append) {
         this.page = 1;
         this.loading = true;
@@ -241,22 +245,19 @@ export const useMarketplaceStore = defineStore("marketplace", {
 
       try {
         if (this.searchMode === "ai") {
-          // AI semantic search (doesn't support pagination yet in API?)
+          // AI semantic search
           const results = await invoke<MarketplaceSkill[]>("search_skillsmp_ai", {
             query,
           });
-          // Replace skills with search results
           this.skills = this.skills.filter((s) => s.source_id !== "skillsmp");
           this.skills.push(...results);
-          this.hasMore = false; // AI search is usually single page
+          this.hasMore = false;
         } else {
-          // Keyword search using WebView Proxy to bypass Cloudflare
           const { skills: results, total } = await this.fetchSkillsmpDirect(query, this.page, this.pageSize);
 
           if (append) {
             this.skills.push(...results);
           } else {
-            // Replace skills with search results
             this.skills = this.skills.filter((s) => s.source_id !== "skillsmp");
             this.skills.push(...results);
           }
@@ -269,6 +270,20 @@ export const useMarketplaceStore = defineStore("marketplace", {
       } finally {
         this.loading = false;
       }
+    },
+
+    addToHistory(query: string) {
+      const q = query.trim();
+      if (!q) return;
+
+      // Deduplicate and move to front
+      this.searchHistory = [q, ...this.searchHistory.filter((h) => h !== q)].slice(0, 10);
+      localStorage.setItem("marketplace_search_history", JSON.stringify(this.searchHistory));
+    },
+
+    clearHistory() {
+      this.searchHistory = [];
+      localStorage.removeItem("marketplace_search_history");
     },
 
     async loadMoreSkillsmp() {

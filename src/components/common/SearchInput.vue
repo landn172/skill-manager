@@ -8,6 +8,8 @@ defineProps<{
 
 defineEmits<{
   (e: "update:modelValue", value: string): void;
+  (e: "focus"): void;
+  (e: "blur"): void;
 }>();
 </script>
 
@@ -18,6 +20,8 @@ defineEmits<{
       type="text"
       :value="modelValue"
       @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+      @focus="$emit('focus')"
+      @blur="$emit('blur')"
       :placeholder="placeholder || 'Search...'"
     />
   </div>
