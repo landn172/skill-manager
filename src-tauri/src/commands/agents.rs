@@ -199,6 +199,22 @@ pub async fn open_in_agent(path: String, agent: AgentType) -> Result<(), String>
                 .spawn()
                 .map_err(|e| format!("Failed to open Cursor: {}", e))?;
         }
+        AgentType::Known(KnownAgentType::Windsurf) => {
+            Command::new("windsurf")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open Windsurf: {}", e))?;
+        }
+        AgentType::Known(KnownAgentType::Trae) => {
+            Command::new("trae")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open Trae: {}", e))?;
+        }
+        AgentType::Known(KnownAgentType::Antigravity) => {
+            // Primarily folder opening as fallback
+            crate::commands::utils::open_in_explorer(path).await?;
+        }
         _ => {
             // For others or custom, fallback to opening folder
             crate::commands::utils::open_in_explorer(path).await?;

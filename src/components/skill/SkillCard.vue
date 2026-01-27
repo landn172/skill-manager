@@ -122,12 +122,11 @@ const handleClearCache = async () => {
         <div
           v-for="agent in installedAgents"
           :key="agent"
-          class="agent-pill"
+          class="agent-pill icon-only"
           :title="`Open in ${agent}`"
           @click.stop="handleOpenInAgent(agent)"
         >
-          <AgentIcon :type="agentsStore.getIcon(agent)" :size="10" />
-          <span class="agent-name-tip">{{ agent }}</span>
+          <AgentIcon :type="agentsStore.getIcon(agent)" :size="14" />
         </div>
       </div>
 
@@ -241,14 +240,16 @@ const handleClearCache = async () => {
 .agent-pill {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
+  justify-content: center;
+  padding: 4px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
+  width: 26px;
+  height: 26px;
 }
 
 .agent-pill:hover {
@@ -256,11 +257,7 @@ const handleClearCache = async () => {
   background: var(--bg-hover);
 }
 
-.agent-name-tip {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
+
 
 .meta-row {
   display: flex;

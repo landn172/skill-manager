@@ -2,8 +2,9 @@
 import { ref, computed } from "vue";
 import Modal from "@/components/common/Modal.vue";
 import { useAgentsStore } from "@/stores/agents";
+import { useMarketplaceStore } from "@/stores/marketplace";
 import AgentIcon from "@/components/icons/AgentIcon.vue";
-import { CheckCircle2, Rocket, ArrowRight } from "lucide-vue-next";
+import { CheckCircle2, Rocket, ArrowRight, Sparkles } from "lucide-vue-next";
 import BaseButton from "@/components/common/BaseButton.vue";
 
 defineProps<{
@@ -15,12 +16,14 @@ const emit = defineEmits<{
 }>();
 
 const agentsStore = useAgentsStore();
+const marketplaceStore = useMarketplaceStore();
 const step = ref(1);
 
 const steps = [
   { id: 1, title: "Welcome" },
   { id: 2, title: "Detect Agents" },
-  { id: 3, title: "Ready!" },
+  { id: 3, title: "Recommendations" },
+  { id: 4, title: "Ready!" },
 ];
 
 async function nextStep() {
@@ -29,10 +32,19 @@ async function nextStep() {
     await agentsStore.fetchAgents();
   } else if (step.value === 2) {
     step.value = 3;
+    if (marketplaceStore.skills.length === 0) {
+      await marketplaceStore.fetchSkills();
+    }
+  } else if (step.value === 3) {
+    step.value = 4;
   } else {
     emit("close");
   }
 }
+
+const recommendedSkills = computed(() => {
+  return marketplaceStore.filteredSkills.slice(0, 3);
+});
 
 const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.installed).length);
 </script>
@@ -99,8 +111,41 @@ const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.i
         </div>
       </div>
 
-      <!-- Step 3: Finish -->
+      <!-- Step 3: Recommendations -->
       <div v-if="step === 3" class="step step-3 animate-slide-up">
+        <div class="scan-header">
+          <div class="hero-icon glass small">
+            <Sparkles :size="32" />
+          </div>
+          <h2>Recommended Skills</h2>
+          <p>Start with these popular skills for your detected agents.</p>
+        </div>
+
+        <div v-if="marketplaceStore.loading" class="loader-wrap">
+          <div class="loader"></div>
+          <p>Fetching top skills...</p>
+        </div>
+
+        <div v-else class="recommendations-list">
+          <div
+            v-for="skill in recommendedSkills"
+            :key="skill.name"
+            class="rec-item glass-card"
+          >
+            <div class="rec-icon">
+              <Sparkles :size="16" />
+            </div>
+            <div class="rec-info">
+              <span class="rec-name">{{ skill.name }}</span>
+              <span class="rec-desc">{{ skill.description }}</span>
+            </div>
+          </div>
+          <p class="skip-hint">You can find many more in the marketplace later.</p>
+        </div>
+      </div>
+
+      <!-- Step 4: Finish -->
+      <div v-if="step === 4" class="step step-4 animate-slide-up">
         <div class="hero-icon success glass">
           <CheckCircle2 :size="48" />
         </div>
@@ -122,8 +167,8 @@ const installedAgentsCount = computed(() => agentsStore.agents.filter((a) => a.i
           ></div>
         </div>
         <BaseButton variant="primary" @click="nextStep">
-          {{ step === 3 ? "Explore Now" : "Continue" }}
-          <ArrowRight v-if="step < 3" :size="16" />
+          {{ step === 4 ? "Explore Now" : "Continue" }}
+          <ArrowRight v-if="step < 4" :size="16" />
         </BaseButton>
       </div>
     </template>
@@ -267,6 +312,70 @@ p {
 .res-card .check {
   color: var(--accent-success);
 }
+
+/* Step 3 Recommendations */
+.hero-icon.small {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  margin-bottom: 4px;
+}
+
+.recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.rec-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  text-align: left;
+}
+
+.rec-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.rec-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rec-name {
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skip-hint {
+  font-size: 11px !important;
+  margin-top: 4px !important;
+  opacity: 0.8;
+}
+
 
 /* Footer */
 .footer-wrap {

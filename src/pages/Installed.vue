@@ -20,7 +20,11 @@ const scope = computed({
   set: (val) => skillsStore.fetchInstalledSkills(val),
 });
 
-const skills = computed(() => skillsStore.installedSkills);
+const skills = computed(() => {
+  return [...skillsStore.installedSkills].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+});
 const loading = computed(() => skillsStore.loading);
 
 const editingSkill = ref<InstalledSkill | null>(null);

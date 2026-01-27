@@ -38,7 +38,7 @@ const canInstallMore = (skill: InstalledSkill) => {
 
 <template>
   <div class="skill-list">
-    <div v-for="skill in skills" :key="skill.name" class="skill-row">
+    <div v-for="skill in skills" :key="skill.name" class="skill-row glass-card">
       <div class="skill-main">
         <h3 class="skill-name">
           {{ skill.name }}
@@ -97,16 +97,10 @@ const canInstallMore = (skill: InstalledSkill) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
   padding: 16px 20px;
-  transition: border-color 0.2s;
 }
 
-.skill-row:hover {
-  border-color: var(--accent-primary);
-}
+
 
 .skill-main {
   flex: 1;
