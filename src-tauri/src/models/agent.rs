@@ -138,25 +138,38 @@ impl AgentConfig {
     }
 
     pub async fn detect_installed(agent: &mut AgentConfig) {
+        let home = dirs::home_dir().unwrap_or_default();
         match &agent.agent_type {
             AgentType::Known(KnownAgentType::Opencode) => {
-                let home = dirs::home_dir().unwrap_or_default();
-                agent.installed =
-                    home.join(".config/opencode").exists() || home.join(".claude/skills").exists();
+                agent.installed = home.join(".config/opencode").exists();
             }
-            AgentType::Known(_) => {
-                // For most known agents, check if global config dir exists
-                agent.installed = agent
-                    .global_skills_dir
-                    .parent()
-                    .map(|p| p.exists())
-                    .unwrap_or(false);
+            AgentType::Known(KnownAgentType::ClaudeCode) => {
+                agent.installed = home.join(".claude").exists();
+            }
+            AgentType::Known(KnownAgentType::Codex) => {
+                agent.installed = home.join(".codex").exists();
+            }
+            AgentType::Known(KnownAgentType::Cursor) => {
+                agent.installed = home.join(".cursor").exists()
+                    || home.join("Library/Application Support/Cursor").exists();
+            }
+            AgentType::Known(KnownAgentType::Gemini) => {
+                agent.installed = home.join(".gemini").exists();
+            }
+            AgentType::Known(KnownAgentType::Vscode) => {
+                agent.installed = home.join(".vscode").exists()
+                    || home.join("Library/Application Support/Code").exists();
+            }
+            AgentType::Known(KnownAgentType::Windsurf) => {
+                agent.installed = home.join(".codeium/windsurf").exists();
+            }
+            AgentType::Known(KnownAgentType::Trae) => {
+                agent.installed = home.join(".trae").exists();
+            }
+            AgentType::Known(KnownAgentType::Antigravity) => {
+                agent.installed = true; // This app is obviously installed
             }
             AgentType::Custom(_) => {
-                // For custom agents, we assume if the user added it and the path is valid, it's "installed"
-                // But strictly, we check if the directory exists or can be created.
-                // Here we just check if the directory path itself is valid/exists.
-                // Actually if it's custom, let's just mark it installed if the path exists.
                 agent.installed = agent.global_skills_dir.exists();
             }
         };

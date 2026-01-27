@@ -6,10 +6,12 @@ import SkillEditor from "@/components/skill/SkillEditor.vue";
 import PageHeader from "@/components/common/PageHeader.vue";
 import InstallModal from "@/components/skill/InstallModal.vue";
 import BaseButton from "@/components/common/BaseButton.vue";
-import { RefreshCw, Package, Plus } from "lucide-vue-next";
+import { RefreshCw, Package, Plus, Trash2 } from "lucide-vue-next";
 import { useSkillsStore } from "@/stores/skills";
+import { useAgentsStore } from "@/stores/agents";
 
 const skillsStore = useSkillsStore();
+const agentsStore = useAgentsStore();
 
 // Install Modal State
 const showInstallModal = ref(false);
@@ -29,12 +31,54 @@ const loading = computed(() => skillsStore.loading);
 
 const editingSkill = ref<InstalledSkill | null>(null);
 
+// Selection State
+const isSelectionMode = ref(false);
+const selectedSkills = ref<string[]>([]);
+
 onMounted(() => {
   skillsStore.fetchInstalledSkills();
+  agentsStore.fetchAgents();
 });
 
 function handleRefresh() {
   skillsStore.fetchInstalledSkills();
+}
+
+function toggleSelectionMode() {
+  isSelectionMode.value = !isSelectionMode.value;
+  if (!isSelectionMode.value) {
+    selectedSkills.value = [];
+  }
+}
+
+function handleToggleSelection(skillName: string) {
+  const index = selectedSkills.value.indexOf(skillName);
+  if (index > -1) {
+    selectedSkills.value.splice(index, 1);
+  } else {
+    selectedSkills.value.push(skillName);
+  }
+}
+
+async function handleBulkUninstall() {
+  if (selectedSkills.value.length === 0) return;
+  if (!confirm(`Are you sure you want to uninstall ${selectedSkills.value.length} selected skill(s)?`)) return;
+
+  try {
+    for (const skillName of selectedSkills.value) {
+      const skill = skillsStore.getSkillByName(skillName);
+      if (skill) {
+        for (const agent of skill.agents) {
+          await skillsStore.uninstallSkill(skillName, agent);
+        }
+      }
+    }
+    isSelectionMode.value = false;
+    selectedSkills.value = [];
+    handleRefresh();
+  } catch (e) {
+    alert(`Failed to uninstall some skills: ${e}`);
+  }
 }
 
 function handleEdit(skill: InstalledSkill) {
@@ -46,7 +90,6 @@ function closeEditor() {
   handleRefresh();
 }
 
-// Open modal for supplemental install
 function openInstallModal(skill: InstalledSkill) {
   selectedSkill.value = skill;
   showInstallModal.value = true;
@@ -69,9 +112,17 @@ function handleScopeChange(newScope: "project" | "global") {
 </script>
 
 <template>
-  <div class="installed-page animate-fade-in">
+  <div class="installed-page animate-fade-in" :class="{ 'has-bulk-bar': isSelectionMode && selectedSkills.length > 0 }">
     <PageHeader title="Installed Skills" description="Manage the skills currently installed on your agents.">
       <template #actions>
+        <BaseButton
+          :variant="isSelectionMode ? 'primary' : 'outline'"
+          @click="toggleSelectionMode"
+          :disabled="skills.length === 0"
+        >
+          {{ isSelectionMode ? 'Cancel Selection' : 'Manage' }}
+        </BaseButton>
+
         <BaseButton variant="ghost" size="icon" @click="handleRefresh" :disabled="loading">
           <RefreshCw :size="20" :class="{ spinning: loading }" />
         </BaseButton>
@@ -122,12 +173,32 @@ function handleScopeChange(newScope: "project" | "global") {
       <div v-else>
         <SkillList
           :skills="skills"
+          :is-selection-mode="isSelectionMode"
+          :selected-skills="selectedSkills"
           @edit="handleEdit"
           @uninstall="handleUninstall"
           @install="openInstallModal"
+          @toggle-selection="handleToggleSelection"
         />
       </div>
     </div>
+
+    <!-- Bulk Action Bar -->
+    <transition name="slide-up">
+      <div v-if="isSelectionMode && selectedSkills.length > 0" class="bulk-action-bar glass">
+        <div class="bulk-info">
+          <span class="count">{{ selectedSkills.length }}</span>
+          <span>skills selected</span>
+        </div>
+        <div class="bulk-ops">
+          <BaseButton variant="ghost" @click="selectedSkills = []">Clear</BaseButton>
+          <BaseButton variant="danger" @click="handleBulkUninstall">
+            <Trash2 :size="18" />
+            <span>Uninstall Selected</span>
+          </BaseButton>
+        </div>
+      </div>
+    </transition>
 
     <!-- Skill Editor Overlay -->
     <SkillEditor
@@ -197,6 +268,60 @@ function handleScopeChange(newScope: "project" | "global") {
 
 .content-area {
   flex: 1;
+  padding-bottom: 20px;
+}
+
+.installed-page.has-bulk-bar .content-area {
+  padding-bottom: 120px;
+}
+
+.bulk-action-bar {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  min-width: 500px;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.bulk-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bulk-info .count {
+  background: var(--accent-primary);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.bulk-ops {
+  display: flex;
+  gap: 12px;
+}
+
+/* Slide Up Transition */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translate(-50%, 100%) scale(0.9);
+  opacity: 0;
 }
 
 .loading-state {

@@ -22,6 +22,11 @@ interface MarketplaceState {
   sortBy: "name" | "stars" | "updated";
   fetchProgress: FetchProgress;
   cachedSkills: import("@/types").CacheMetadata[];
+  // Pagination
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  total: number;
 }
 
 export const useMarketplaceStore = defineStore("marketplace", {
@@ -42,6 +47,10 @@ export const useMarketplaceStore = defineStore("marketplace", {
       status: "idle",
     },
     cachedSkills: [],
+    page: 1,
+    pageSize: 50,
+    hasMore: false,
+    total: 0,
   }),
 
   getters: {
@@ -190,7 +199,8 @@ export const useMarketplaceStore = defineStore("marketplace", {
 
             if (source.id === "skillsmp") {
               // Use Proxy for SkillsMP to bypass Cloudflare
-              newSkills = await this.fetchSkillsmpDirect("*");
+              const { skills: skillsmpResults } = await this.fetchSkillsmpDirect("*", 1, this.pageSize);
+              newSkills = skillsmpResults;
             } else {
               // Use standard backend fetch for others
               newSkills = await invoke<MarketplaceSkill[]>("fetch_marketplace_skills", {
@@ -217,27 +227,42 @@ export const useMarketplaceStore = defineStore("marketplace", {
       }
     },
 
-    async searchSkillsmp(query: string) {
+    async searchSkillsmp(query: string, append = false) {
       if (!query.trim()) {
+        this.page = 1;
+        this.hasMore = false;
         return this.fetchSkills("skillsmp");
+      }
+
+      if (!append) {
+        this.page = 1;
+        this.loading = true;
       }
 
       try {
         if (this.searchMode === "ai") {
-          // AI semantic search
+          // AI semantic search (doesn't support pagination yet in API?)
           const results = await invoke<MarketplaceSkill[]>("search_skillsmp_ai", {
             query,
           });
           // Replace skills with search results
           this.skills = this.skills.filter((s) => s.source_id !== "skillsmp");
           this.skills.push(...results);
+          this.hasMore = false; // AI search is usually single page
         } else {
           // Keyword search using WebView Proxy to bypass Cloudflare
-          const results = await this.fetchSkillsmpDirect(query);
+          const { skills: results, total } = await this.fetchSkillsmpDirect(query, this.page, this.pageSize);
 
-          // Replace skills with search results
-          this.skills = this.skills.filter((s) => s.source_id !== "skillsmp");
-          this.skills.push(...results);
+          if (append) {
+            this.skills.push(...results);
+          } else {
+            // Replace skills with search results
+            this.skills = this.skills.filter((s) => s.source_id !== "skillsmp");
+            this.skills.push(...results);
+          }
+          
+          this.total = total;
+          this.hasMore = this.skills.filter(s => s.source_id === 'skillsmp').length < total;
         }
       } catch (e) {
         useToastStore().error(`Search failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -246,15 +271,16 @@ export const useMarketplaceStore = defineStore("marketplace", {
       }
     },
 
+    async loadMoreSkillsmp() {
+      if (this.loading || !this.hasMore || this.selectedSource !== "skillsmp") return;
+      this.page++;
+      await this.searchSkillsmp(this.searchQuery, true);
+    },
+
     /**
      * Fetch SkillsMP using Tauri HTTP plugin (bypasses CORS and uses native HTTP client)
-     *
-     * Architecture Note:
-     * - Browser fetch() is blocked by CORS in dev mode (localhost origin)
-     * - Tauri HTTP plugin makes native requests, bypassing CORS entirely
-     * - This also works around Cloudflare's browser detection
      */
-    async fetchSkillsmpDirect(query: string, page = 1, limit = 50): Promise<MarketplaceSkill[]> {
+    async fetchSkillsmpDirect(query: string, page = 1, limit = 50): Promise<{ skills: MarketplaceSkill[], total: number }> {
       const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
 
       // Get API Key from Rust store
@@ -278,42 +304,37 @@ export const useMarketplaceStore = defineStore("marketplace", {
         },
       });
 
-      console.log("[SkillsMP] Response status:", response.status);
-
       if (!response.ok) {
         const text = await response.text();
         throw new Error(`SkillsMP API error (${response.status}): ${text}`);
       }
 
       const data = await response.json();
-      console.log("[SkillsMP] Raw response:", data);
-
+      
       if (!data.success) {
         throw new Error(data.error?.message || "SkillsMP request failed");
       }
 
+      const total = data.pagination?.total || 0;
+
       // Handle different response structures
-      let skills = data.data;
-      if (!Array.isArray(skills)) {
-        console.warn("[SkillsMP] data.data is not an array:", typeof skills, skills);
-        // Try to extract from nested structure
-        if (skills && Array.isArray(skills.skills)) {
-          skills = skills.skills;
-        } else if (skills && Array.isArray(skills.results)) {
-          skills = skills.results;
+      let rawSkills = data.data;
+      if (!Array.isArray(rawSkills)) {
+        if (rawSkills && Array.isArray(rawSkills.skills)) {
+          rawSkills = rawSkills.skills;
+        } else if (rawSkills && Array.isArray(rawSkills.results)) {
+          rawSkills = rawSkills.results;
         } else {
-          skills = [];
+          rawSkills = [];
         }
       }
-      console.log("[SkillsMP] Got", skills.length, "skills");
 
-      return skills.map((s: any) => ({
+      const skills = rawSkills.map((s: any) => ({
         name: s.name,
         description: s.description || "",
-        path: s.skillUrl || s.githubUrl || "", // Use skillUrl or githubUrl as path
+        path: s.skillUrl || s.githubUrl || "", 
         version: undefined,
         metadata: {
-          // Use githubUrl directly - it's already a full URL
           repo: s.githubUrl || "",
           repo_url: s.githubUrl || "",
           author: s.author || "",
@@ -322,10 +343,12 @@ export const useMarketplaceStore = defineStore("marketplace", {
         source_id: "skillsmp",
         source_name: "SkillsMP",
         stars: s.stars || 0,
-        repo: s.githubUrl, // For display purposes
+        repo: s.githubUrl, 
         repo_url: s.githubUrl,
         tags: [],
       }));
+
+      return { skills, total };
     },
 
     async refreshAll() {

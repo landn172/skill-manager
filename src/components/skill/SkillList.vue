@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Pencil, Trash2, PlusCircle } from "lucide-vue-next";
+import { Pencil, Trash2, PlusCircle, Check } from "lucide-vue-next";
 import { invoke } from "@tauri-apps/api/core";
 import type { InstalledSkill } from "@/types";
 import AgentIcon from "@/components/icons/AgentIcon.vue";
@@ -9,12 +9,15 @@ const agentsStore = useAgentsStore();
 
 defineProps<{
   skills: InstalledSkill[];
+  isSelectionMode?: boolean;
+  selectedSkills?: string[];
 }>();
 
 const emit = defineEmits<{
   (e: "edit", skill: InstalledSkill): void;
   (e: "uninstall", skill: InstalledSkill): void;
   (e: "install", skill: InstalledSkill): void;
+  (e: "toggle-selection", skillName: string): void;
 }>();
 
 const handleOpenInAgent = async (skill: InstalledSkill, agent: string) => {
@@ -37,8 +40,20 @@ const canInstallMore = (skill: InstalledSkill) => {
 </script>
 
 <template>
-  <div class="skill-list">
-    <div v-for="skill in skills" :key="skill.name" class="skill-row glass-card">
+  <div class="skill-list" :class="{ 'selection-mode': isSelectionMode }">
+    <div
+      v-for="skill in skills"
+      :key="skill.name"
+      class="skill-row glass-card"
+      :class="{ selected: selectedSkills?.includes(skill.name) }"
+      @click="isSelectionMode && emit('toggle-selection', skill.name)"
+    >
+      <div v-if="isSelectionMode" class="selection-checkbox">
+        <div class="checkbox-inner">
+          <Check v-if="selectedSkills?.includes(skill.name)" :size="12" />
+        </div>
+      </div>
+
       <div class="skill-main">
         <h3 class="skill-name">
           {{ skill.name }}
@@ -59,7 +74,7 @@ const canInstallMore = (skill: InstalledSkill) => {
         </div>
       </div>
 
-      <div class="skill-actions">
+      <div v-if="!isSelectionMode" class="skill-actions">
         <!-- Supplemental Install Button -->
         <button
           v-if="canInstallMore(skill)"
@@ -98,9 +113,40 @@ const canInstallMore = (skill: InstalledSkill) => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid var(--glass-border);
 }
 
+.selection-mode .skill-row {
+  cursor: pointer;
+}
 
+.skill-row.selected {
+  border-color: var(--accent-primary);
+  background: rgba(139, 92, 246, 0.05);
+  transform: translateX(4px);
+}
+
+.selection-checkbox {
+  padding-right: 16px;
+}
+
+.checkbox-inner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: all 0.2s;
+}
+
+.selected .checkbox-inner {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
 
 .skill-main {
   flex: 1;
@@ -131,6 +177,7 @@ const canInstallMore = (skill: InstalledSkill) => {
   color: var(--text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 1;
+  line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

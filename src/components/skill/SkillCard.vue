@@ -169,10 +169,10 @@ const handleClearCache = async () => {
       </div>
 
       <div class="primary-actions">
-        <BaseButton v-if="isInstalled && hasUpdate" variant="primary" size="sm" @click="emit('update', skill)">
+        <BaseButton v-if="isInstalled && hasUpdate" variant="primary" size="sm" @click="emit('update', installedSkill!)">
           Update
         </BaseButton>
-        <BaseButton v-if="isInstalled && canInstallMore" variant="outline" size="sm" @click="emit('install', skill)">
+        <BaseButton v-if="isInstalled && canInstallMore" variant="outline" size="sm" @click="emit('install', installedSkill!)">
           Add Agent
         </BaseButton>
         <BaseButton v-if="isInstalled" variant="ghost" size="icon" class="delete-btn" @click="emit('uninstall', skill.name)">

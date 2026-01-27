@@ -116,6 +116,7 @@ const navItems = [
   font-weight: 800;
   letter-spacing: -0.03em;
   background: var(--accent-gradient);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -197,15 +198,22 @@ select:hover {
   transform: translateX(4px);
 }
 
+.nav-item:hover .icon-wrap {
+  transform: scale(1.1) rotate(-5deg);
+  color: var(--accent-primary);
+}
+
 .nav-item.active {
   background: rgba(139, 92, 246, 0.1);
   color: var(--accent-primary);
-  border-color: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: var(--accent-glow);
 }
 
 .nav-item.active .icon-wrap {
   color: var(--accent-primary);
   transform: scale(1.1);
+  filter: drop-shadow(0 0 5px var(--accent-primary));
 }
 
 .footer {

@@ -24,23 +24,27 @@ defineProps<Props>();
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  margin-bottom: 24px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .title {
-  font-size: 24px;
+  font-size: 32px;
+  font-weight: 800;
   margin: 0;
+  letter-spacing: -0.04em;
   background: var(--accent-gradient);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .description {
-  margin: 4px 0 0;
+  margin: 8px 0 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .actions {

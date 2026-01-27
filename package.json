@@ -33,6 +33,7 @@
     "gray-matter": "^4.0.3",
     "lucide-static": "^0.562.0",
     "lucide-vue-next": "^0.562.0",
+    "marked": "^17.0.1",
     "pinia": "^3.0.4",
     "radix-vue": "^1.9.17",
     "simple-git": "^3.30.0",
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.6",
+    "@types/marked": "^5.0.2",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/test-utils": "^2.4.6",
     "happy-dom": "^20.3.4",

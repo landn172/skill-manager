@@ -29,20 +29,24 @@ const installLogs = ref<
 // Initialize selected agents when modal opens
 watch(
   () => props.show,
-  (show) => {
-    if (show && props.skill) {
+  async (show) => {
+    if (show) {
       installLogs.value = [];
-      // Default to all installed agents for Marketplace, or uninstalled ones for Supplemental
-      const installedFor = (props.skill as any).agents || [];
-      selectedAgents.value = agentsStore.agents
-        .filter((a) => a.installed && !installedFor.includes(a.agent_type))
-        .map((a) => a.agent_type);
-      
-      // If already installed on all, or a fresh install from market
-      if (selectedAgents.value.length === 0) {
+      await agentsStore.fetchAgents();
+
+      if (props.skill) {
+        // Default to all installed agents for Marketplace, or uninstalled ones for Supplemental
+        const installedFor = (props.skill as any).agents || [];
         selectedAgents.value = agentsStore.agents
-          .filter((a) => a.installed)
+          .filter((a) => a.installed && !installedFor.includes(a.agent_type))
           .map((a) => a.agent_type);
+        
+        // If already installed on all, or a fresh install from market
+        if (selectedAgents.value.length === 0) {
+          selectedAgents.value = agentsStore.agents
+            .filter((a) => a.installed)
+            .map((a) => a.agent_type);
+        }
       }
     }
   }
@@ -164,34 +168,6 @@ function toggleAgent(agentType: string) {
     <div class="install-container">
       <div class="setup-section">
         <section class="config-group">
-          <label class="group-label">Select Agents</label>
-          <div class="agents-grid">
-            <div
-              v-for="agent in agentsStore.agents"
-              :key="agent.agent_type"
-              class="agent-card"
-              :class="{
-                selected: selectedAgents.includes(agent.agent_type),
-                disabled: !agent.installed,
-              }"
-              @click="agent.installed && toggleAgent(agent.agent_type)"
-            >
-              <div class="agent-info">
-                <AgentIcon
-                  :type="agentsStore.getIcon(agent.agent_type)"
-                  :size="20"
-                  class="icon"
-                />
-                <span class="name">{{ agent.display_name }}</span>
-              </div>
-              <div v-if="selectedAgents.includes(agent.agent_type)" class="check">
-                <CheckCircle2 :size="16" />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="config-group">
           <label class="group-label">Installation Scope</label>
           <div class="scope-picker">
             <button
@@ -212,6 +188,38 @@ function toggleAgent(agentType: string) {
           <p class="scope-hint">
             {{ installScope === 'project' ? 'Available only in current project.' : 'Available across all projects.' }}
           </p>
+        </section>
+
+        <section class="config-group">
+          <label class="group-label">Select Agents</label>
+          <div class="agents-grid">
+            <div
+              v-for="agent in agentsStore.agents"
+              :key="agent.agent_type"
+              class="agent-card"
+              :class="{
+                selected: selectedAgents.includes(agent.agent_type),
+                disabled: !agent.installed,
+              }"
+              @click="agent.installed && toggleAgent(agent.agent_type)"
+              :title="!agent.installed ? `Please configure ${agent.display_name} in Settings` : ''"
+            >
+              <div class="agent-info">
+                <AgentIcon
+                  :type="agentsStore.getIcon(agent.agent_type)"
+                  :size="20"
+                  class="icon"
+                />
+                <div class="text-stack">
+                  <span class="name">{{ agent.display_name }}</span>
+                  <span v-if="!agent.installed" class="status-hint">Not Detected</span>
+                </div>
+              </div>
+              <div v-if="selectedAgents.includes(agent.agent_type)" class="check">
+                <CheckCircle2 :size="16" />
+              </div>
+            </div>
+          </div>
         </section>
       </div>
 
@@ -328,6 +336,21 @@ function toggleAgent(agentType: string) {
 .agent-info .name {
   font-weight: 500;
   font-size: 14px;
+}
+
+.text-stack {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.status-hint {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-error);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  opacity: 0.8;
 }
 
 .check {

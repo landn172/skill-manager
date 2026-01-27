@@ -250,6 +250,17 @@ pub async fn install_skill(
             .find(|a| &a.agent_type == agent_type)
             .ok_or_else(|| format!("Agent configuration not found for {:?}", agent_type))?;
 
+        // Double check if agent is actually installed
+        if !agent_config.installed {
+            results.push(InstallResult {
+                success: false,
+                path: "".into(),
+                agent: agent_type.clone(),
+                error: Some(format!("Agent {} is not detected on this system. Please configure its path in Settings.", agent_config.display_name)),
+            });
+            continue;
+        }
+
         let target_base = match scope {
             InstallScope::Global => agent_config.global_skills_dir.clone(),
             InstallScope::Project => {

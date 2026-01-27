@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { Save, X, Eye, Code } from "lucide-vue-next";
+import { Save, Eye, Code } from "lucide-vue-next";
 import { invoke } from "@tauri-apps/api/core";
+import { marked } from "marked";
+import Modal from "@/components/common/Modal.vue";
+import BaseButton from "@/components/common/BaseButton.vue";
 
 const props = defineProps<{
   skillPath: string;
@@ -45,7 +48,6 @@ async function handleSave() {
     });
     originalContent.value = content.value;
     emit("save");
-    alert("Skill saved successfully!");
   } catch (e) {
     alert(`Failed to save: ${e}`);
   } finally {
@@ -54,226 +56,279 @@ async function handleSave() {
 }
 
 const hasChanges = computed(() => content.value !== originalContent.value);
+
+const renderedMarkdown = computed(() => {
+  return marked.parse(content.value);
+});
 </script>
 
 <template>
-  <div class="skill-editor">
-    <header class="editor-header">
-      <div class="editor-title">
-        <span class="skill-name">{{ skillName }}</span>
-        <span class="file-path">{{ filename }}</span>
-        <span v-if="hasChanges" class="unsaved-dot"></span>
-      </div>
+  <Modal
+    :show="true"
+    :title="`Edit ${skillName}`"
+    maxWidth="950px"
+    @close="emit('close')"
+  >
+    <div class="editor-container">
+      <div class="editor-toolbar">
+        <div class="file-info">
+          <Code :size="14" />
+          <span>{{ filename }}</span>
+          <span v-if="hasChanges" class="unsaved-badge">Modified</span>
+        </div>
 
-      <div class="editor-actions">
         <div class="view-toggle">
           <button
             :class="{ active: viewMode === 'edit' }"
             @click="viewMode = 'edit'"
-            title="Edit Mode"
           >
             <Code :size="16" />
+            <span>Edit</span>
           </button>
           <button
             :class="{ active: viewMode === 'preview' }"
             @click="viewMode = 'preview'"
-            title="Preview Mode"
           >
             <Eye :size="16" />
+            <span>Preview</span>
           </button>
         </div>
-
-        <button class="save-btn" :disabled="!hasChanges || saving" @click="handleSave">
-          <Save :size="18" />
-          <span>{{ saving ? "Saving..." : "Save" }}</span>
-        </button>
-
-        <button class="close-btn" @click="emit('close')">
-          <X :size="20" />
-        </button>
-      </div>
-    </header>
-
-    <div class="editor-body">
-      <div v-if="loading" class="loading-overlay">
-        <div class="loader"></div>
       </div>
 
-      <template v-else>
-        <textarea
-          v-if="viewMode === 'edit'"
-          v-model="content"
-          spellcheck="false"
-          placeholder="Enter skill instructions here..."
-        ></textarea>
-
-        <div v-else class="preview-area">
-          <!-- Simple markdown preview logic could go here, for now just pre -->
-          <pre>{{ content }}</pre>
+      <div class="editor-body">
+        <div v-if="loading" class="loading-state">
+          <div class="loader"></div>
+          <p>Loading content...</p>
         </div>
-      </template>
+
+        <template v-else>
+          <textarea
+            v-if="viewMode === 'edit'"
+            v-model="content"
+            spellcheck="false"
+            placeholder="Enter skill instructions here..."
+            class="styled-textarea"
+          ></textarea>
+
+          <div
+            v-else
+            class="preview-area markdown-body"
+            v-html="renderedMarkdown"
+          ></div>
+        </template>
+      </div>
     </div>
-  </div>
+
+    <template #footer>
+      <div class="editor-footer">
+        <BaseButton variant="ghost" @click="emit('close')" :disabled="saving">Cancel</BaseButton>
+        <BaseButton
+          variant="primary"
+          :loading="saving"
+          :disabled="!hasChanges || loading"
+          @click="handleSave"
+        >
+          <Save :size="18" />
+          <span>Save Changes</span>
+        </BaseButton>
+      </div>
+    </template>
+  </Modal>
 </template>
 
 <style scoped>
-.skill-editor {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: var(--bg-primary);
+.editor-container {
   display: flex;
   flex-direction: column;
-  z-index: 200;
+  gap: 16px;
+  height: 60vh;
+  min-height: 500px;
 }
 
-.editor-header {
-  height: 60px;
+.editor-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--border-color);
-  background-color: var(--bg-secondary);
+  padding: 0 4px;
 }
 
-.editor-title {
+.file-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.skill-name {
-  font-weight: 600;
-}
-
-.file-path {
+  gap: 8px;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
 }
 
-.unsaved-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--accent-warning);
-}
-
-.editor-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.unsaved-badge {
+  font-size: 10px;
+  background: var(--accent-warning);
+  color: #000;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .view-toggle {
   display: flex;
-  background-color: var(--bg-tertiary);
-  padding: 2px;
-  border-radius: 6px;
+  background: var(--bg-tertiary);
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
 }
 
 .view-toggle button {
-  padding: 6px 12px;
-  border-radius: 4px;
-  color: var(--text-muted);
-}
-
-.view-toggle button.active {
-  background-color: var(--bg-secondary);
-  color: var(--accent-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.save-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: var(--accent-primary);
-  color: white;
-  padding: 8px 16px;
+  padding: 6px 16px;
   border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.save-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(1);
-}
-
-.close-btn {
-  padding: 8px;
-  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-muted);
+  transition: all 0.2s;
 }
 
-.close-btn:hover {
-  background-color: var(--bg-hover);
+.view-toggle button:hover {
   color: var(--text-primary);
+}
+
+.view-toggle button.active {
+  background: var(--bg-primary);
+  color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .editor-body {
   flex: 1;
-  position: relative;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
   overflow: hidden;
+  position: relative;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
 }
 
-textarea {
+.styled-textarea {
   width: 100%;
-  height: 100%;
-  background: none;
+  flex: 1;
+  background: transparent;
   border: none;
+  border-radius: 12px;
   outline: none;
-  padding: 32px;
-  font-family: "Fira Code", "Courier New", Courier, monospace;
-  font-size: 15px;
-  line-height: 1.6;
-  resize: none;
+  padding: 24px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 14px;
+  line-height: 1.62;
   color: var(--text-primary);
+  resize: none;
 }
 
 .preview-area {
-  width: 100%;
-  height: 100%;
   padding: 32px;
+  height: 100%;
   overflow-y: auto;
+  background: var(--bg-primary);
 }
 
-pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-size: 14px;
+/* Markdown Styles */
+.markdown-body {
+  font-family: var(--font-family);
   line-height: 1.6;
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
-.loading-overlay {
-  position: absolute;
-  inset: 0;
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3) {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.markdown-body :deep(h1) { font-size: 1.5em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+.markdown-body :deep(h2) { font-size: 1.25em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+.markdown-body :deep(h3) { font-size: 1.1em; }
+
+.markdown-body :deep(p) { margin-bottom: 16px; }
+
+.markdown-body :deep(code) {
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  background-color: var(--bg-hover);
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.markdown-body :deep(pre) {
+  padding: 16px;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  background-color: var(--bg-secondary);
+  border-radius: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+}
+
+.markdown-body :deep(pre code) {
+  padding: 0;
+  background: none;
+  font-size: 100%;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  padding-left: 2em;
+  margin-bottom: 16px;
+}
+
+.markdown-body :deep(blockquote) {
+  padding: 0 1em;
+  color: var(--text-muted);
+  border-left: 0.25em solid var(--accent-primary);
+  margin: 0 0 16px 0;
+}
+
+.markdown-body :deep(hr) {
+  height: 1px;
+  padding: 0;
+  margin: 24px 0;
+  background-color: var(--border-color);
+  border: 0;
+}
+
+.loading-state {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: var(--bg-primary);
+  height: 100%;
+  gap: 16px;
+  color: var(--text-muted);
 }
 
 .loader {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border: 3px solid var(--border-color);
-  border-radius: 50%;
   border-top-color: var(--accent-primary);
+  border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 
+.editor-footer {
+  display: flex;
+  gap: 12px;
+}
+
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 </style>
